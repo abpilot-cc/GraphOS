@@ -41,10 +41,12 @@ export default function install(app) {
                 type: ['string', 'float', 'integer', 'boolean', 'JSONSchema'],
                 description: "Type of the variant",
                 required: true,
+                defaultValue: 'string',
             },
             "jsonSchema": {
                 type: "JSONSchema",
                 description: "JSON schema of the variant",
+                defaultValue: '{}',
             },
             "valueExpression": {
                 type: "string",

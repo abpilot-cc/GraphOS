@@ -86,22 +86,55 @@ GraphOS 的一切能力都通过 `skills/graph-management/SKILL.md` 暴露给 AI
 
 ## 🎨 插件系统 (Plugin System)
 
-GraphOS 允许开发者通过插件扩展节点类型和 UI 行为：
+GraphOS 通过插件注册节点类型。插件导出一个 `install(app)` 函数，在其中调用 `app.addNodeType(...)` 声明节点的元数据、属性定义以及允许的连线关系：
 
 ```typescript
-import { Graph } from '@graphos/core';
+export default function install(app) {
+  app.addNodeType({
+    type: "Variant",
+    description: "Variant",
+    properties: {
+      name: {
+        type: "string",
+        description: "Name of the variant",
+        required: true,
+      },
+      type: {
+        type: ["string", "float", "integer", "boolean", "JSONSchema"],
+        description: "Type of the variant",
+        required: true,
+        defaultValue: "string",
+      },
+      jsonSchema: {
+        type: "JSONSchema",
+        description: "JSON schema of the variant",
+        defaultValue: {},
+      },
+      valueExpression: {
+        type: "string",
+        description: "Expression to compute the value of the variant",
+        required: true,
+      },
+    },
+    inTypes: ["World", "Context"],
+    outTypes: [],
+  });
 
-const graph = new Graph();
-
-// 注册一个新技能节点
-graph.registerNode({
-  type: "slack.post",
-  inputs: { channel: "string", message: "string" },
-  run: async (ctx) => {
-    // 实际的执行逻辑
-  }
-});
+  app.on("changed", (event) => {
+    console.log("Graph changed:", event.data);
+  });
+}
 ```
+
+节点类型定义与运行时校验规则由 `@graphos/core` 统一约束：
+
+*   `properties` 用于声明节点属性，支持 `string`、`float`、`integer`、`boolean`、`JSONSchema`，以及字符串枚举数组。
+*   `required: true` 的属性在节点实例中必须提供，否则校验失败。
+*   `inTypes` 和 `outTypes` 定义当前节点允许连接的上游/下游节点类型，也可以使用 `'*'` 表示不限制。
+*   `JSONSchema` 类型会在注册和赋值时进行 schema 有效性校验，避免把非法 schema 写入图。
+*   `app.on("changed", handler)` 可监听图变更事件，回调中的 `event.data` 即当前完整图结构。
+
+这使得插件既能扩展 UI 中可用的节点库，也能把节点的结构约束交给运行时统一验证。
 
 ---
 

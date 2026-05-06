@@ -38,6 +38,7 @@ import {
   Pencil
 } from 'lucide-react';
 import './i18n';
+import { validateNode } from 'graphos-core';
 
 // --- Types ---
 
@@ -68,7 +69,93 @@ interface ApiNodeType {
   outTypes?: string[] | '*';
 }
 
+type SchemaEditorFrameMessage = {
+  source: 'gso-json-schema-editor';
+  type: 'ready' | 'change' | 'error';
+  payload?: unknown;
+};
+
 const LAST_GRAPH_ID_STORAGE_KEY = 'gso-last-graph-id';
+
+function makeJsonSchemaDraftKey(nodeId: string, key: string): string {
+  return `${nodeId}:${key}`;
+}
+
+function escapeForInlineScript(text: string): string {
+  return text.replace(/<\//g, '<\\/');
+}
+
+function buildSchemaEditorIframeDoc(initialSchema: unknown, lang: 'en_US' | 'zh_CN'): string {
+  const initialText = JSON.stringify(initialSchema ?? {}, null, 2);
+  const safeInitialText = escapeForInlineScript(initialText);
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/jsoneditor@9.10.2/dist/jsoneditor.min.css" />
+  <style>
+    html, body, #root { margin: 0; padding: 0; width: 100%; height: 100%; overflow: auto; }
+    body { background: #0f172a; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    #root { display: flex; flex-direction: column; }
+    .jsoneditor { flex: 1; border: none; background: #0f172a; }
+    .jsoneditor-menu { background: #1e293b; border-bottom: 1px solid #334155; }
+    .jsoneditor-menu button { color: #94a3b8; }
+    .jsoneditor-modes button { color: #94a3b8; }
+    .jsoneditor-modes button.active { color: #60a5fa; background: #1e293b; }
+    .jsoneditor-tree { color: #e2e8f0; }
+    .jsoneditor-value { color: #86efac; }
+    .jsoneditor-string { color: #a78bfa; }
+    .jsoneditor-number { color: #fb923c; }
+    .jsoneditor-boolean { color: #f87171; }
+    .jsoneditor-null { color: #94a3b8; }
+    .jsoneditor-key { color: #60a5fa; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script id="initial-schema" type="application/json">${safeInitialText}</script>
+
+  <script src="https://unpkg.com/jsoneditor@9.10.2/dist/jsoneditor.min.js"><\/script>
+
+  <script>
+    (function () {
+      function post(type, payload) {
+        parent.postMessage({ source: 'gso-json-schema-editor', type: type, payload: payload }, '*');
+      }
+
+      try {
+        var container = document.getElementById('root');
+        var raw = document.getElementById('initial-schema').textContent || '{}';
+        var initialValue = JSON.parse(raw);
+
+        var options = {
+          mode: 'code',
+          modes: ['code', 'tree', 'form', 'view'],
+          indentation: 2,
+          onChange: function () {
+            try {
+              var value = editor.get();
+              post('change', value);
+            } catch (e) {
+              // Ignore errors during change
+            }
+          }
+        };
+
+        var editor = new JSONEditor(container, options);
+        editor.set(initialValue);
+        
+        post('ready', null);
+      } catch (err) {
+        post('error', err && err.message ? err.message : String(err));
+      }
+    })();
+  </script>
+</body>
+</html>`;
+}
 
 const NODE_TYPE_ICON_COMPONENTS = [
   Globe,
@@ -299,6 +386,67 @@ function GraphOS() {
   const nodeTypeRegistryRef = useRef<NodeType[]>([]);
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
+  const selectionGraphIdRef = useRef(currentGraphId);
+  const schemaEditorFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [schemaEditorFrameReady, setSchemaEditorFrameReady] = useState(false);
+  const [schemaEditorFrameError, setSchemaEditorFrameError] = useState<string | null>(null);
+  const [advancedSchemaTarget, setAdvancedSchemaTarget] = useState<{ nodeId: string; key: string } | null>(null);
+  const [advancedSchemaDraft, setAdvancedSchemaDraft] = useState<unknown>(null);
+  const [jsonSchemaDrafts, setJsonSchemaDrafts] = useState<Record<string, string>>({});
+  const [nodeValidationErrors, setNodeValidationErrors] = useState<Record<string, string | undefined>>({});
+
+  const normalizeSchemaValue = useCallback((raw: unknown): unknown => {
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw;
+      }
+    }
+    return raw ?? {};
+  }, []);
+
+  const openAdvancedSchemaEditor = useCallback((nodeId: string, key: string, value: unknown) => {
+    setAdvancedSchemaTarget({ nodeId, key });
+    setAdvancedSchemaDraft(normalizeSchemaValue(value));
+    setSchemaEditorFrameReady(false);
+    setSchemaEditorFrameError(null);
+  }, [normalizeSchemaValue]);
+
+  const schemaEditorFrameDoc = useMemo(() => {
+    if (!advancedSchemaTarget) return '';
+    const lang = i18n.language.startsWith('zh') ? 'zh_CN' : 'en_US';
+    return buildSchemaEditorIframeDoc(advancedSchemaDraft ?? {}, lang);
+  }, [advancedSchemaDraft, advancedSchemaTarget, i18n.language]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!advancedSchemaTarget) return;
+      const frameWindow = schemaEditorFrameRef.current?.contentWindow;
+      if (!frameWindow || event.source !== frameWindow) return;
+
+      const data = event.data as SchemaEditorFrameMessage | undefined;
+      if (!data || data.source !== 'gso-json-schema-editor') return;
+
+      if (data.type === 'ready') {
+        setSchemaEditorFrameReady(true);
+        return;
+      }
+
+      if (data.type === 'error') {
+        const message = typeof data.payload === 'string' ? data.payload : 'Unknown iframe error';
+        setSchemaEditorFrameError(message);
+        return;
+      }
+
+      if (data.type === 'change') {
+        setAdvancedSchemaDraft(normalizeSchemaValue(data.payload));
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [advancedSchemaTarget, normalizeSchemaValue]);
 
   // --- Theme Management ---
   useEffect(() => {
@@ -365,6 +513,10 @@ function GraphOS() {
       setNodeTypeRegistry(apiTypes.map(toNodeType));
     });
 
+    newSocket.on('graph-selection', ({ selectedNodeId }: { graphId: string; selectedNodeId: string | null }) => {
+      setSelectedNodeId(selectedNodeId);
+    });
+
     return () => {
       newSocket.close();
     };
@@ -376,6 +528,17 @@ function GraphOS() {
       socket.emit('get-graph-list');
     }
   }, [socket, currentGraphId]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    if (selectionGraphIdRef.current !== currentGraphId) {
+      selectionGraphIdRef.current = currentGraphId;
+      return;
+    }
+
+    socket.emit('select-node', { graphId: currentGraphId, nodeId: selectedNodeId });
+  }, [socket, currentGraphId, selectedNodeId]);
 
   useEffect(() => {
     localStorage.setItem(LAST_GRAPH_ID_STORAGE_KEY, currentGraphId);
@@ -406,6 +569,44 @@ function GraphOS() {
   useEffect(() => {
     edgesRef.current = edges as Edge[];
   }, [edges]);
+
+  useEffect(() => {
+    setJsonSchemaDrafts({});
+  }, [selectedNodeId]);
+
+  // Validate selected node when it changes or node type registry updates
+  useEffect(() => {
+    if (!selectedNodeId) {
+      setNodeValidationErrors({});
+      return;
+    }
+
+    const selectedNode = nodes.find(n => n.id === selectedNodeId);
+    if (!selectedNode || !selectedNode.type) return;
+
+    const nodeTypeDef = nodeTypeRegistry.find(nt => nt.type === selectedNode.type);
+    if (!nodeTypeDef) return;
+
+    const [isValid, error] = validateNode(
+      {
+        id: selectedNode.id,
+        type: selectedNode.type,
+        properties: selectedNode.data.properties ?? {},
+        position: [selectedNode.position.x, selectedNode.position.y]
+      },
+      {
+        type: nodeTypeDef.type,
+        description: nodeTypeDef.description,
+        properties: nodeTypeDef.properties,
+        inTypes: nodeTypeDef.inTypes,
+        outTypes: nodeTypeDef.outTypes
+      }
+    );
+    setNodeValidationErrors(prev => ({
+      ...prev,
+      [selectedNodeId]: error
+    }));
+  }, [selectedNodeId, nodes, nodeTypeRegistry]);
 
   // Fetch node types from API on mount, refresh when socket reconnects
   useEffect(() => {
@@ -548,8 +749,10 @@ function GraphOS() {
   }, [setEdges, socket, currentGraphId]);
 
   const onSelectionChange = useCallback(({ nodes }: { nodes: Node[] }) => {
-    setSelectedNodeId(nodes[0]?.id || null);
-  }, []);
+    const nextSelectedNodeId = nodes[0]?.id || null;
+    setSelectedNodeId(nextSelectedNodeId);
+    socket?.emit('select-node', { graphId: currentGraphId, nodeId: nextSelectedNodeId });
+  }, [socket, currentGraphId]);
 
   const updateNodeLabel = (id: string, label: string) => {
     const nextNodes = nodes.map(n => n.id === id ? { ...n, data: { ...n.data, label } } : n);
@@ -565,6 +768,33 @@ function GraphOS() {
     );
     setNodes(nextNodes);
     socket?.emit('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
+
+    // Validate the node
+    const updatedNode = nextNodes.find(n => n.id === id);
+    if (updatedNode && updatedNode.type) {
+      const nodeTypeDef = nodeTypeRegistry.find(nt => nt.type === updatedNode.type);
+      if (nodeTypeDef) {
+        const [isValid, error] = validateNode(
+          {
+            id: updatedNode.id,
+            type: updatedNode.type,
+            properties: updatedNode.data.properties ?? {},
+            position: [updatedNode.position.x, updatedNode.position.y]
+          },
+          {
+            type: nodeTypeDef.type,
+            description: nodeTypeDef.description,
+            properties: nodeTypeDef.properties,
+            inTypes: nodeTypeDef.inTypes,
+            outTypes: nodeTypeDef.outTypes
+          }
+        );
+        setNodeValidationErrors(prev => ({
+          ...prev,
+          [id]: error
+        }));
+      }
+    }
   };
 
   // --- Copy / Paste ---
@@ -875,18 +1105,43 @@ function GraphOS() {
                 }
 
                 if (def.type === 'JSONSchema') {
-                  const raw = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+                  const draftKey = makeJsonSchemaDraftKey(selectedNode.id, key);
+                  const baseRaw = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '');
+                  const raw = jsonSchemaDrafts[draftKey] ?? baseRaw;
                   return (
                     <div key={key} className="space-y-1">
-                      {label}
+                      <div className="flex items-center justify-between gap-2">
+                        {label}
+                        <button
+                          type="button"
+                          onClick={() => openAdvancedSchemaEditor(selectedNode.id, key, raw)}
+                          className="px-2 py-1 rounded-md border border-panel-border text-[10px] font-bold uppercase tracking-wide text-text-secondary hover:bg-canvas-bg transition-colors"
+                        >
+                          Advanced Editor
+                        </button>
+                      </div>
                       <textarea
                         rows={5}
                         value={raw}
                         onChange={e => {
+                          const nextRaw = e.target.value;
+                          setJsonSchemaDrafts((prev) => ({ ...prev, [draftKey]: nextRaw }));
                           try {
-                            updateNodeProperty(selectedNode.id, key, JSON.parse(e.target.value));
+                            updateNodeProperty(selectedNode.id, key, JSON.parse(nextRaw));
                           } catch {
                             /* allow partial edits — commit on valid JSON only */
+                          }
+                        }}
+                        onBlur={() => {
+                          try {
+                            updateNodeProperty(selectedNode.id, key, JSON.parse(raw));
+                            setJsonSchemaDrafts((prev) => {
+                              const next = { ...prev };
+                              delete next[draftKey];
+                              return next;
+                            });
+                          } catch {
+                            // Keep draft text if still invalid JSON.
                           }
                         }}
                         spellCheck={false}
@@ -949,12 +1204,92 @@ function GraphOS() {
                   {!nodeTypeDef && (
                     <p className="text-xs text-text-secondary italic">No property schema found for this node type.</p>
                   )}
+
+                  {/* Validation Result */}
+                  <div className="border-t border-panel-border pt-4">
+                    <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-2">Validation</p>
+                    {nodeValidationErrors[selectedNode.id] ? (
+                      <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono break-words">
+                        {nodeValidationErrors[selectedNode.id]}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 text-xs font-mono">
+                        ✓ All properties valid
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })()}
           </div>
         </div>
       </aside>
+
+      {advancedSchemaTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl h-[95vh] bg-panel-bg border border-panel-border rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="px-4 py-3 border-b border-panel-border flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-text-primary">JSON Schema Advanced Editor</h3>
+              <button
+                type="button"
+                onClick={() => setAdvancedSchemaTarget(null)}
+                className="px-2 py-1 rounded-md border border-panel-border text-xs text-text-secondary hover:bg-canvas-bg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="relative flex-1 overflow-hidden bg-canvas-bg">
+              <iframe
+                key={advancedSchemaTarget.nodeId + ':' + advancedSchemaTarget.key}
+                ref={schemaEditorFrameRef}
+                title="JSON Schema Advanced Editor"
+                srcDoc={schemaEditorFrameDoc}
+                className="h-full w-full border-0"
+                sandbox="allow-scripts allow-same-origin"
+              />
+
+              {!schemaEditorFrameReady && !schemaEditorFrameError && (
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-text-secondary bg-canvas-bg/90">
+                  Loading advanced editor...
+                </div>
+              )}
+
+              {schemaEditorFrameError && (
+                <div className="absolute inset-0 p-4 flex items-center justify-center text-sm text-red-300 bg-canvas-bg/95">
+                  Failed to load advanced editor: {schemaEditorFrameError}
+                </div>
+              )}
+            </div>
+
+            <div className="px-4 py-3 border-t border-panel-border flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAdvancedSchemaTarget(null)}
+                className="px-3 py-2 rounded-lg border border-panel-border text-text-secondary hover:bg-canvas-bg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const draftKey = makeJsonSchemaDraftKey(advancedSchemaTarget.nodeId, advancedSchemaTarget.key);
+                  updateNodeProperty(advancedSchemaTarget.nodeId, advancedSchemaTarget.key, advancedSchemaDraft ?? {});
+                  setJsonSchemaDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[draftKey];
+                    return next;
+                  });
+                  setAdvancedSchemaTarget(null);
+                }}
+                className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
