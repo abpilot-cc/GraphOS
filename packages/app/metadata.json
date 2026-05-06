@@ -1,0 +1,6 @@
+{
+  "name": "GraphOS",
+  "description": "AI-Operable Node Graph Runtime + Plugin System + HTTP-first API",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["AI-native node graph execution"]
+}

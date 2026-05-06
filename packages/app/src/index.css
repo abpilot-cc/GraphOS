@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas-bg: var(--canvas-bg);
+  --color-canvas-grid: var(--canvas-grid);
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-border: var(--panel-border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+}
+
+:root {
+  --canvas-bg: #f8fafc;
+  --canvas-bg-rgb: 248, 250, 252;
+  --canvas-grid: #e2e8f0;
+  --panel-bg: #ffffff;
+  --panel-border: #e2e8f0;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+}
+
+[data-theme='dark'] {
+  --canvas-bg: #0f172a;
+  --canvas-bg-rgb: 15, 23, 42;
+  --canvas-grid: #1e293b;
+  --panel-bg: #1e293b;
+  --panel-border: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+}
+
+body {
+  @apply bg-canvas-bg text-text-primary transition-colors duration-200;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+#root {
+  @apply h-screen w-screen overflow-hidden;
+}
+
+/* ReactFlow Overrides */
+.react-flow__pane {
+  @apply bg-canvas-bg;
+}
+
+.react-flow__node {
+  @apply border-0 bg-transparent p-0 shadow-none text-text-primary;
+  color: var(--text-primary) !important;
+}
+
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output {
+  @apply rounded-xl border p-4 shadow-sm transition-all;
+  background-color: var(--panel-bg) !important;
+  border-color: var(--panel-border) !important;
+  color: var(--text-primary) !important;
+}
+
+.react-flow__handle {
+  @apply size-3 border-2 border-panel-bg bg-blue-500;
+  border-radius: 50% !important;
+}
+
+.react-flow__edge-path {
+  @apply stroke-text-secondary stroke-2;
+}
+
+.react-flow__controls button {
+  background-color: var(--panel-bg) !important;
+  border-bottom: 1px solid var(--panel-border) !important;
+}
+
+.react-flow__controls button:hover {
+  background-color: var(--canvas-bg) !important;
+}
+
+.react-flow__controls button svg {
+  fill: var(--text-primary) !important;
+}
