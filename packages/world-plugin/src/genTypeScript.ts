@@ -8,12 +8,16 @@ function generateCode(graph: IGraph): string {
     const nodeMap: Map<string, INode> = new Map();
     const contextNodes: INode[] = [];
     const eventNodes: INode[] = [];
+    const worldNodes: INode[] = [];
 
     // Build node map and collect context nodes
     for (const node of graph.nodes) {
         nodeMap.set(node.id, node);
         if (node.type === 'Context' || node.type === 'World') {
             contextNodes.push(node);
+            if (node.type === 'World') {
+                worldNodes.push(node);
+            }
         } else if (node.type === 'Event') {
             eventNodes.push(node);
         }
@@ -85,9 +89,10 @@ export class ContextBase<TObject extends IObject, TParent, TContext extends ICon
 
     // Generate Event
     for (const eventNode of eventNodes) {
+        const worldName = worldNodes[0]?.properties.name || worldNodes[0]?.id || 'World';
         const eventName = eventNode.properties.name || eventNode.id;
         const interfaceName = `I${capitalize(eventName)}`;
-        const baseName = 'IEvent';
+        const baseName = `IEvent<${worldName}Context>`;
 
         code += `export interface ${interfaceName}Event extends ${baseName} {\n`;
         code += `${indent}type: ${JSON.stringify(eventName)};\n`;

@@ -1,7 +1,7 @@
 ---
 name: graph-world
-description: 'Design World/Context/Variant/System/Event/EventSystem graph models for games and applications. Use when creating domain models, lifecycle systems, startup events, and event-driven context initialization in GraphOS. Depends on graph-management skill for graph read/apply APIs.'
-argument-hint: 'Describe your domain and goals, e.g. "RPG world with player inventory and startup initialization"'
+description: 'Design World/Context/Variant/System/Event/EventSystem graph models for games and applications. Use when creating domain models, lifecycle systems, bootstrap events, and event-driven context initialization in GraphOS. Depends on graph-management skill for graph read/apply APIs.'
+argument-hint: 'Describe your domain and goals, e.g. "RPG world with player inventory and bootstrap initialization"'
 user-invocable: true
 ---
 
@@ -86,22 +86,21 @@ Completion check:
 Goal: bind lifecycle behavior to existing data model scopes.
 
 1. For each behavior unit, create a `System` under its owning `World`/`Context`.
-2. Enable only required lifecycle toggles:
-   - `startupEnabled`, `updateEnabled`, `changeEnabled`, `spawnEnabled`, `despawnEnabled`.
-3. Fill corresponding descriptions:
-   - `startupDescription`, `updateDescription`, `changeDescription`, `spawnDescription`, `despawnDescription`.
+2. Define required lifecycle entry points by implementation contract:
+   - `spawn`, `despawn`, `update`, `change`.
+3. Document each implemented lifecycle method with clear intent, trigger, and target data scope.
 4. Ensure system responsibilities align with nearby Context/Variant ownership.
 5. Apply and verify topology.
 
 Decision points:
 - Place System at the nearest scope that owns the data it mutates.
-- Use `Startup` for initialization, `Update` for recurring logic, `Change` for reactive sync, `Spawn/Despawn` for entity/context lifecycle.
+- Use `Spawn` for initialization, `Update` for recurring logic, `Change` for reactive sync, `Despawn` for cleanup.
 - Split a System when a single node spans unrelated responsibilities.
 
 Completion check:
-- Each enabled lifecycle timing has a matching description.
+- Each implemented lifecycle method has a matching description.
 - Systems are attached to the correct World/Context scope.
-- No timing is enabled without a clear trigger and data target.
+- No lifecycle method exists without a clear trigger and data target.
 
 TypeScript example (implement System after Graph is validated):
 
@@ -146,7 +145,7 @@ Goal: model event-driven flows after data and lifecycle foundations are stable.
 Decision points:
 - Create an `Event` for cross-context or explicit trigger boundaries.
 - Use `EventSystem` when handling should be decoupled from per-frame System logic.
-- For startup flows, prefer explicit `GameStarted` (or equivalent) event plus handler.
+- For bootstrap flows, prefer an explicit startup/boot event plus handler.
 
 Completion check:
 - Every critical trigger has an Event.
@@ -173,7 +172,7 @@ export function createSpawnBulletOnShootEventSystem(): SpawnBulletOnShootEventSy
 Implementation guidance:
 - Ensure Event payload fields are defined in Graph and match `IChickenShootEvent`.
 - Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
-- If Event or payload schema changes in Graph, regenerate `../gen/World.js` types before updating EventSystem code.
+- If Event or payload schema changes in Graph, regenerate `./gen/World.js` types before updating EventSystem code.
 
 ### Step 4: Closed-Loop Validation and Completion
 
@@ -181,16 +180,16 @@ Goal: verify the model is end-to-end closed-loop; if not, patch missing links an
 
 1. Run full validation after Step 1-3:
    - Re-run `get_graph_description` and compare expected topology with actual graph.
-   - Optionally inspect key nodes with `get_graph_node` (World, core Contexts, startup Event).
+   - Optionally inspect key nodes with `get_graph_node` (World, core Contexts, bootstrap Event).
 2. Validate closure dimensions:
    - Structural closure: single World root, no orphan Context/Variant/System/Event/EventSystem.
    - Data closure: each critical runtime datum exists as typed Variant and has owner scope.
-   - Behavior closure: each enabled lifecycle timing has a concrete description and target data.
-   - Trigger closure: startup and key domain triggers map to Event -> EventSystem -> target Context updates.
+   - Behavior closure: each implemented lifecycle method has a concrete description and target data.
+   - Trigger closure: bootstrap and key domain triggers map to Event -> EventSystem -> target Context updates.
    - Transaction closure: all apply results are successful, or retries resolved partial failures.
 3. If any closure check fails, classify and patch gaps in one focused transaction batch:
    - Missing structure/data -> go back to Step 1.
-   - Missing lifecycle behavior -> go back to Step 2.
+   - Missing lifecycle method coverage -> go back to Step 2.
    - Missing event trigger/handler chain -> go back to Step 3.
 4. Re-run closure validation until all dimensions pass.
 5. Produce final verification summary:
@@ -208,12 +207,12 @@ Completion check:
 1. Structure gate: exactly one World root and coherent Context tree.
 2. Type gate: Variants are typed correctly; JSONSchema nodes contain valid schema text.
 3. Ownership gate: Systems and Variants are attached to the scope that owns their data.
-4. Event gate: Event/EventSystem pairs cover startup and key domain triggers.
+4. Event gate: Event/EventSystem pairs cover bootstrap and key domain triggers.
 5. Verification gate: re-run `get_graph_description` after each apply and confirm expected node/edge deltas.
 
 ## Suggested Prompt Inputs
 
-- "Design a roguelike game world with player, map, combat, and startup event flow."
+- "Design a roguelike game world with player, map, combat, and bootstrap event flow."
 - "Build an e-commerce world model with catalog/order/payment contexts and event-driven order creation."
 - "Create a smart-home app model with device contexts, lifecycle systems, and device-connected event handling."
 
@@ -233,7 +232,7 @@ flowchart TD
    D --> E{Step 1 complete?\nno orphan data\nall key variants typed}
    E -- No --> D
    E -- Yes --> F[Step 2\nDefine Systems]
-   F --> G{Step 2 complete?\nlifecycle toggles + descriptions\nownership aligned}
+   F --> G{Step 2 complete?\nlifecycle methods + intent docs\nownership aligned}
    G -- No --> F
    G -- Yes --> H[Step 3\nDefine Events + EventSystems]
    H --> I{Step 3 complete?\ncritical events covered\nhandler chain defined}
