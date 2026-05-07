@@ -1,0 +1,18 @@
+{
+  "id": "main",
+  "name": "Main Pipeline",
+  "nodes": [
+    {
+      "id": "welcome-node",
+      "type": "text",
+      "position": [
+        250,
+        5
+      ],
+      "properties": {
+        "name": "Welcome to GraphOS"
+      }
+    }
+  ],
+  "edges": []
+}

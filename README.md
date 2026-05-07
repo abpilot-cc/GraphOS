@@ -66,21 +66,64 @@ graphos/
 GraphOS 的一切能力都通过 `skills/graph-management/SKILL.md` 暴露给 AI。
 
 ### 核心工具 (Tools)
-*   `get_graph_description`: 获取当前图中所有节点及其连接关系的文本摘要。
-*   `get_available_node_types`: 查询系统中支持的节点库（如：HTTP 请求、逻辑分支、AI 总结）。
-*   `apply_graph_transaction`: 批量提交图修改指令（创建节点、连线、更新数据）。
+当前运行时在 `packages/app/srv/routes.ts` 中注册了 5 个 API，可直接映射为 AI 工具：
+
+*   `get_graph_description` → `GET /api/graph/description`
+    *   用途：获取图整体结构摘要（节点、边、根节点、叶子节点、邻接关系、`aiSummary`）。
+    *   参数：`graphId`（可选，未传或无效时会回退到当前打开图/首个可用图）。
+*   `get_graph_node` → `GET /api/graph/node`
+    *   用途：聚焦单个节点，返回该节点及其父/子节点的结构化描述。
+    *   参数：`graphId`（可选）、`nodeId`（可选；若省略则使用该图当前同步的选中节点）。
+    *   行为：当 `nodeId` 缺失且当前没有同步选中节点时，返回 `400`。
+*   `get_available_node_types` → `GET /api/node-types`
+    *   用途：获取插件注册的全部节点类型定义（`type`、`description`、`properties`、连线约束等）。
+*   `get_plugins` → `GET /api/plugins`
+    *   用途：查看插件加载状态。
+    *   返回项：`name`、`status`、`error`、`nodeTypeCount`。
+*   `apply_graph_transaction` → `POST /api/graph/apply`
+    *   用途：以事务方式批量修改图。
+    *   请求体：`{ graphId?, ops }`。
+    *   返回：`success`、`applied/errors`、更新后的 `graph/nodes/edges`、`aiSummary`。
 
 ### 事务化操作
 为了保证图的一致性，AI 的操作被封装为**事务**。这避免了网络波动导致的“残缺工作流”：
 ```json
 // AI 发送的事务请求
 {
+  "graphId": "main",
   "ops": [
-    { "op": "CREATE_NODE", "metadata": { "type": "http.request", "id": "n1" } },
-    { "op": "CONNECT", "metadata": { "from": "n1", "to": "n2" } }
+    {
+      "op": "CREATE_NODE",
+      "metadata": {
+        "id": "n1",
+        "type": "http.request",
+        "position": { "x": 120, "y": 80 },
+        "data": {
+          "properties": {
+            "url": "https://example.com"
+          }
+        }
+      }
+    },
+    {
+      "op": "CONNECT",
+      "metadata": {
+        "id": "edge_manual_n1_n2",
+        "source": "n1",
+        "target": "n2"
+      }
+    }
   ]
 }
 ```
+
+支持的操作类型与 `metadata` 结构如下：
+
+*   `CREATE_NODE`: `{ id, type, position: { x, y }, data? }`
+*   `UPDATE_NODE`: `{ id, data }`
+*   `DELETE_NODE`: `{ id }`
+*   `CONNECT`: `{ id, source, target, sourceHandle?, targetHandle? }`
+*   `DISCONNECT`: `{ id }`（`id` 为边 ID，格式通常为 `edge_<idx>_<source>_<target>`）
 
 ---
 

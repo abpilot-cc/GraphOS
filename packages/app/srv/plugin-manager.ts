@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import fs from "fs";
-import path from "path";
+import path, { parse } from "path";
 import { pathToFileURL } from "url";
 import type { IGraph, INodeType } from "graphos-core";
 
@@ -16,7 +16,7 @@ type PluginApp = {
   on(event: AppEvent, listener: (event: IAppEventChanged) => void): PluginApp;
 };
 
-type PluginInstaller = (app: PluginApp) => void | Promise<void>;
+type PluginInstaller = (app: PluginApp, env: any) => void | Promise<void>;
 
 function makePluginApp(): { app: PluginApp; nodeTypes: INodeType[] } {
   const nodeTypes: INodeType[] = [];
@@ -83,37 +83,95 @@ export interface PluginManagerEvents {
 export class PluginManager extends EventEmitter {
   private readonly plugins = new Map<string, PluginInfo>();
   private readonly pluginAppListeners = new Map<string, Map<AppEvent, Array<(event: IAppEventChanged) => void>>>();
-  private readonly pluginsDir: string;
+  private readonly graphosDir: string;
+  private readonly workDir: string;
   private watcher: fs.FSWatcher | null = null;
   private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(pluginsDir: string) {
+  constructor(workDir: string) {
     super();
-    this.pluginsDir = pluginsDir;
+    this.workDir = workDir;
+    this.graphosDir = path.join(workDir, ".graphos");
+  }
+
+  private getGraphosPackageJsonPath(): string {
+    return path.join(this.graphosDir, "package.json");
+  }
+
+  private readGraphosDependencies(): [string[], any] {
+    const packageJsonPath = this.getGraphosPackageJsonPath();
+    try {
+      if (!fs.existsSync(packageJsonPath)) {
+        console.warn(`[PluginManager] Missing GraphOS package.json at ${packageJsonPath}`);
+        return [[], { workDir: this.workDir }];
+      }
+
+      const raw = fs.readFileSync(packageJsonPath, "utf-8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const deps = parsed.dependencies;
+      if (!deps || typeof deps !== "object") {
+        return [[], parsed.graphos ? { ...parsed.graphos, workDir: this.workDir } : { workDir: this.workDir }];
+      }
+
+      return [Object.keys(deps as Record<string, unknown>), parsed.graphos ? { ...parsed.graphos, workDir: this.workDir } : { workDir: this.workDir }];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[PluginManager] Failed reading GraphOS dependencies: ${message}`);
+      return [[], null];
+    }
+  }
+
+  private resolvePluginEntryPath(name: string): string {
+    const packageJsonPath = path.join(this.graphosDir, "node_modules", name, "package.json");
+    if (!fs.existsSync(packageJsonPath)) {
+      throw new Error(`Cannot resolve package '${name}' from ${this.graphosDir}/node_modules`);
+    }
+
+    const raw = fs.readFileSync(packageJsonPath, "utf-8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const graphos = parsed.graphos;
+    if (!graphos || typeof graphos !== "object") {
+      throw new Error(`Package '${name}' is missing graphos config`);
+    }
+
+    const plugin = (graphos as Record<string, unknown>).plugin;
+    if (!plugin || typeof plugin !== "object") {
+      throw new Error(`Package '${name}' is missing graphos.plugin config`);
+    }
+
+    const entry = (plugin as Record<string, unknown>).entry;
+    if (typeof entry !== "string" || !entry) {
+      throw new Error(`Package '${name}' has invalid graphos.plugin.entry`);
+    }
+
+    return path.resolve(path.dirname(packageJsonPath), entry);
   }
 
   // ---- Loading -----------------------------------------------------------
 
-  async loadAll(): Promise<void> {
-    if (!fs.existsSync(this.pluginsDir)) {
-      console.log(`[PluginManager] No plugins directory at ${this.pluginsDir}`);
-      return;
+  async loadAll(): Promise<any> {
+    const [deps, env] = this.readGraphosDependencies();
+    if (deps.length === 0) {
+      for (const name of this.plugins.keys()) {
+        this.unloadPlugin(name);
+      }
+      console.log("[PluginManager] No plugin dependencies found in .graphos/package.json");
+      return env;
     }
 
-    const entries = fs.readdirSync(this.pluginsDir, { withFileTypes: true });
-    const dirs = entries.filter((e) => e.isDirectory());
+    const next = new Set(deps);
+    for (const existing of this.plugins.keys()) {
+      if (!next.has(existing)) {
+        this.unloadPlugin(existing);
+      }
+    }
 
-    await Promise.all(dirs.map((d) => this.loadPlugin(d.name)));
+    await Promise.all(deps.map((depName) => this.loadPlugin(depName, env)));
+    return env;
   }
 
-  async loadPlugin(name: string): Promise<void> {
-    const entryPath = path.join(this.pluginsDir, name, "app.js");
-
-    if (!fs.existsSync(entryPath)) {
-      console.warn(`[PluginManager] Plugin '${name}' has no app.js, skipping`);
-      return;
-    }
-
+  async loadPlugin(name: string, env: any): Promise<void> {
+    let entryPath = "";
     const { app: pluginApp, nodeTypes } = makePluginApp();
     const appListeners = new Map<AppEvent, Array<(event: IAppEventChanged) => void>>();
 
@@ -138,6 +196,11 @@ export class PluginManager extends EventEmitter {
     };
 
     try {
+      entryPath = this.resolvePluginEntryPath(name);
+      if (!fs.existsSync(entryPath)) {
+        throw new Error(`Plugin entry does not exist: ${entryPath}`);
+      }
+
       // Use a timestamp query to bust Node.js ESM import cache on hot reload
       const url = `${pathToFileURL(entryPath).href}?t=${Date.now()}`;
       const mod = await import(url);
@@ -147,7 +210,7 @@ export class PluginManager extends EventEmitter {
         throw new Error(`default export must be a function, got ${typeof installer}`);
       }
 
-      await installer(compatApp);
+      await installer(compatApp, env);
 
       const info: PluginInfo = { name, entryPath, status: "loaded", nodeTypes };
       this.plugins.set(name, info);
@@ -198,10 +261,10 @@ export class PluginManager extends EventEmitter {
     }
   }
 
-  async reloadPlugin(name: string): Promise<void> {
+  async reloadPlugin(name: string, env: any): Promise<void> {
     // Remove stale entry so loadPlugin starts fresh
     this.plugins.delete(name);
-    await this.loadPlugin(name);
+    await this.loadPlugin(name, env);
   }
 
   // ---- Query helpers -----------------------------------------------------
@@ -226,32 +289,60 @@ export class PluginManager extends EventEmitter {
 
   // ---- Hot reload (fs.watch) ---------------------------------------------
 
-  watchPlugins(): void {
+  watchPlugins(env: any): void {
     if (this.watcher) return;
 
-    if (!fs.existsSync(this.pluginsDir)) {
-      // Watch parent so we notice when plugins/ is created
-      const parent = path.dirname(this.pluginsDir);
-      console.log(`[PluginManager] Waiting for plugins directory to appear…`);
+    if (!fs.existsSync(this.graphosDir)) {
+      // Watch parent so we notice when .graphos/ is created
+      const parent = path.dirname(this.graphosDir);
+      console.log("[PluginManager] Waiting for .graphos directory to appear...");
       const parentWatcher = fs.watch(parent, (_, filename) => {
-        if (filename && path.join(parent, filename) === this.pluginsDir && fs.existsSync(this.pluginsDir)) {
+        if (filename && path.join(parent, filename) === this.graphosDir && fs.existsSync(this.graphosDir)) {
           parentWatcher.close();
-          this._startWatch();
+          this._startWatch(env);
         }
       });
       return;
     }
 
-    this._startWatch();
+    this._startWatch(env);
   }
 
-  private _startWatch(): void {
-    this.watcher = fs.watch(this.pluginsDir, { recursive: true }, (_, filename) => {
+  private _startWatch(env: any): void {
+    this.watcher = fs.watch(this.graphosDir, { recursive: true }, (_, filename) => {
       if (!filename) return;
 
-      // On Windows path separators may differ; normalise
-      const parts = filename.split(/[\\/]/);
-      const pluginName = parts[0];
+      const normalized = filename.replace(/\\/g, "/");
+      if (normalized === "package.json") {
+        const existing = this.debounceTimers.get("__all__");
+        if (existing) clearTimeout(existing);
+
+        this.debounceTimers.set(
+          "__all__",
+          setTimeout(() => {
+            this.debounceTimers.delete("__all__");
+            console.log("[PluginManager] .graphos/package.json changed, reloading all plugins...");
+            void this.loadAll().catch((e: unknown) => {
+              console.error("[PluginManager] Hot-reload error while loading all plugins:", e);
+            });
+          }, 250),
+        );
+        return;
+      }
+
+      if (!normalized.startsWith("node_modules/")) return;
+
+      const parts = normalized.split("/");
+      let pluginName = parts[1] ?? "";
+      if (pluginName.startsWith("@")) {
+        const scopedName = parts[2] ?? "";
+        if (!scopedName) return;
+        pluginName = `${pluginName}/${scopedName}`;
+      }
+
+      const dependencies = this.readGraphosDependencies();
+      if (!dependencies.includes(pluginName)) return;
+
       if (!pluginName) return;
 
       // Debounce: wait 250 ms after last event for the same plugin
@@ -263,14 +354,14 @@ export class PluginManager extends EventEmitter {
         setTimeout(() => {
           this.debounceTimers.delete(pluginName);
           console.log(`[PluginManager] Change in '${pluginName}', reloading…`);
-          this.reloadPlugin(pluginName).catch((e: unknown) => {
+          this.reloadPlugin(pluginName, env).catch((e: unknown) => {
             console.error(`[PluginManager] Hot-reload error for '${pluginName}':`, e);
           });
         }, 250),
       );
     });
 
-    console.log(`[PluginManager] Watching ${this.pluginsDir}`);
+    console.log(`[PluginManager] Watching ${this.graphosDir}`);
   }
 
   stopWatching(): void {

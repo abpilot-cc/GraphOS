@@ -1,0 +1,11 @@
+{
+  "type": "module",
+  "dependencies": {
+    "graphos-world-plugin": "file:../packages/world-plugin"
+  },
+  "graphos": {
+    "world": {
+      "genTypeScript": true
+    }
+  }
+}

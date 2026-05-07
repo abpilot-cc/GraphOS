@@ -1,0 +1,27 @@
+{
+  "name": "graphos-world-plugin",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "graphos": {
+    "plugin": {
+      "entry": "dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "graphos-core": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
+  },
+  "files": [
+    "dist/"
+  ]
+}

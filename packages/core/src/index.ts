@@ -9,11 +9,15 @@ export interface INode {
 }
 
 export type NodePropertyType = 'string' | 'float' | 'integer' | 'boolean' | 'JSONSchema' | string[];
+export type NodePropertyEditor = 'text' | 'number' | 'checkbox' | 'select' | 'textarea' | 'json' | string;
+
 export type NodeProperty = {
     type: NodePropertyType;
     description: string;
     defaultValue?: any;
     required?: boolean;
+    editor?: NodePropertyEditor;
+    visible?: Record<string, any>; // Conditional visibility based on other property values
 }
 
 export interface INodeType {
@@ -88,6 +92,10 @@ function validateNodePropertyDefinition(key: string, property: NodeProperty): st
         return `property definition "${key}" has invalid required flag`;
     }
 
+    if (property.visible !== undefined && !isPlainObject(property.visible)) {
+        return `property definition "${key}" has invalid visible rule`;
+    }
+
     if (Array.isArray(property.type)) {
         if (property.type.length === 0) {
             return `property definition "${key}" must have at least one allowed value`;
@@ -103,6 +111,18 @@ function validateNodePropertyDefinition(key: string, property: NodeProperty): st
     }
 
     return undefined;
+}
+
+function isNodePropertyVisible(property: NodeProperty, nodeProperties: Record<string, unknown>): boolean {
+    if (property.visible === undefined) {
+        return true;
+    }
+
+    if (!isPlainObject(property.visible)) {
+        return false;
+    }
+
+    return Object.entries(property.visible).every(([relatedKey, expectedValue]) => nodeProperties[relatedKey] === expectedValue);
 }
 
 function validateNodePropertyValue(key: string, value: unknown, property: NodeProperty): string | undefined {
@@ -163,6 +183,10 @@ export function validateNode(node: INode, nodeType: INodeType): [boolean, string
         const definitionError = validateNodePropertyDefinition(key, property);
         if (definitionError) {
             return [false, definitionError];
+        }
+
+        if (!isNodePropertyVisible(property, node.properties)) {
+            continue;
         }
 
         const value = node.properties[key];

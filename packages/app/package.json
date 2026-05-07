@@ -1,24 +1,42 @@
 {
-  "name": "graphos-app",
-  "private": true,
-  "version": "0.0.0",
+  "name": "graphos-cli",
+  "version": "1.0.4",
   "type": "module",
+  "files": [
+    "bin/",
+    "build/",
+    "dist/"
+  ],
+  "bin": {
+    "graphos": "./bin/graphos.mjs"
+  },
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build",
+    "start": "node build/server.js",
+    "dev": "tsx server.ts --cwd=../..",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build": "npm run build:server && vite build",
+    "prepack": "npm run build",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist build",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.21.2",
+    "graphos-core": "^1.0.1",
+    "socket.io": "^4.8.3",
+    "vite": "^6.2.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.14",
     "antd": "^6.3.7",
-    "cors": "^2.8.6",
-    "dotenv": "^17.2.3",
-    "express": "^4.21.2",
-    "graphos-core": "file:../core",
+    "autoprefixer": "^10.4.21",
     "i18next": "^26.0.8",
     "i18next-browser-languagedetector": "^8.2.1",
     "json-schema-editor-visual": "^2.0.0",
@@ -28,16 +46,7 @@
     "react-dom": "^19.0.1",
     "react-i18next": "^17.0.6",
     "reactflow": "^11.11.4",
-    "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "vite": "^6.2.3",
-    "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^22.14.0",
-    "@types/react": "^19.2.14",
-    "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
