@@ -103,6 +103,35 @@ Completion check:
 - Systems are attached to the correct World/Context scope.
 - No timing is enabled without a clear trigger and data target.
 
+TypeScript example (implement System after Graph is validated):
+
+```ts
+import type { GameplayContext } from './gen/World.js'; // graph auto-generated TypeScript types
+import type { ISystem } from 'graphos-world-plugin';
+
+export function createGameBootstrapSystem(): ISystem<GameplayContext> {
+   return {
+      spawn(ctx: GameplayContext): void {
+         // TODO
+      },
+      despawn(ctx: GameplayContext): void {
+         // TODO
+      },
+      update(ctx: GameplayContext, deltaTime: number): void {
+         // TODO
+      },
+      change(ctx: GameplayContext): void {
+         // TODO
+      },
+   };
+}
+```
+
+Implementation guidance:
+- Keep method behavior aligned with the closure checks in Step 4.
+- Do not implement business logic before Graph data model and ownership are finalized.
+- If Graph changes update generated context types, regenerate types first, then update this System implementation.
+
 ### Step 3: Define Events and EventSystems
 
 Goal: model event-driven flows after data and lifecycle foundations are stable.
@@ -123,6 +152,28 @@ Completion check:
 - Every critical trigger has an Event.
 - Every Event has at least one intended EventSystem handler (or explicitly documented as future work).
 - Event payload Variants match handler input expectations.
+
+TypeScript example (implement EventSystem after Graph trigger chain is validated):
+
+```ts
+import type { ChickenMergeLiteWorldContext, IChickenShootEvent } from './gen/World.js'; // graph auto-generated TypeScript types
+import type { ISystem } from 'graphos-world-plugin';
+
+export type SpawnBulletOnShootEventSystem = ISystem<ChickenMergeLiteWorldContext, IChickenShootEvent>;
+
+export function createSpawnBulletOnShootEventSystem(): SpawnBulletOnShootEventSystem {
+   return {
+      handle(event: IChickenShootEvent): void {
+         // TODO
+      },
+   };
+}
+```
+
+Implementation guidance:
+- Ensure Event payload fields are defined in Graph and match `IChickenShootEvent`.
+- Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
+- If Event or payload schema changes in Graph, regenerate `../gen/World.js` types before updating EventSystem code.
 
 ### Step 4: Closed-Loop Validation and Completion
 

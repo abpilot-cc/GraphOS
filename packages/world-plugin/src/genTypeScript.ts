@@ -40,60 +40,7 @@ function generateCode(graph: IGraph): string {
  * @generated World TypeScript Accessor
  * Generated on: ${new Date().toISOString()}
  */
-
-export interface IEventSource<T extends IObject> {
-    readonly object: T;
-    readonly id: string;
-    readonly table: string;
-}
-
-export interface IEvent {
-    readonly type: string;
-}
-
-export interface GetEvent<T extends IObject> extends IEvent {
-    readonly type: 'get';
-    readonly source: IEventSource<T>;
-}
-
-export interface SetEvent<T extends IObject> extends IEvent {
-    readonly type: 'set';
-    readonly data: Partial<T>;
-    readonly source: IEventSource<T>;
-}
-
-export interface AddEvent<T extends IObject> extends IEvent {
-    readonly type: 'add';
-    readonly data: Partial<T>;
-    readonly source: IEventSource<T>;
-}
-
-export interface DelEvent<T extends IObject> extends IEvent {
-    readonly type: 'del';
-    readonly source: IEventSource<T>;
-}
-
-export interface IContext {
-    trigger(event: IEvent): void;
-    next_id(): string;
-    get<T extends IObject>(type: string, id: string, parent: IObject | null): T | null;
-    set<T extends IObject>(type: string, id: string, value: Partial<T>, parent: IObject | null): void;
-    del<T extends IObject>(v: T, parent: IObject | null): void;
-    create<T extends IObject>(type: string, value: Partial<T>, parent: IObject | null): T;
-    getChildren<T extends IObject>(type: string, parent: IObject | null): T[];
-}
-
-export interface ICache {
-  get<T>(key: string): T | null;
-  set<T>(key: string, value: T): void;
-  del(key: string): void;
-}
-
-export interface IObject {
-  table: string;
-  id: string;
-}
-
+import { IEventSource, IEvent, GetEvent, SetEvent, AddEvent, DelEvent, IContext, ICache, IObject } from "graphos-world-plugin";
 
 export class ContextBase<TObject extends IObject, TParent, TContext extends IContext> {
     constructor(
