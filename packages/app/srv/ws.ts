@@ -6,6 +6,7 @@ import {
   getCurrentOpenGraphId,
   getGraphFilePath,
   getGraphSelectionState,
+  getWorkingDir,
   graphSelectionState,
   listGraphs,
   loadGraph,
@@ -21,6 +22,7 @@ import {
   type RFEdge,
   type GraphData,
 } from "./core.ts";
+import { listGraphHistory } from "./history.ts";
 
 export function registerSocketHandlers(io: Server, pluginManager: PluginManager) {
   io.on("connection", (socket) => {
@@ -68,9 +70,13 @@ export function registerSocketHandlers(io: Server, pluginManager: PluginManager)
       console.log(`Creating graph: ${name}`);
       const id = `graph_${Date.now()}`;
       const newGraph: GraphData = { id, name, nodes: [], edges: [] };
-      saveGraph(newGraph);
+      saveGraph(newGraph, { source: "ui.create-graph", summary: `create:${name}` });
       setCurrentOpenGraphId(id);
       io.emit("graph-list", listGraphs());
+      io.to(id).emit("graph-history-updated", {
+        graphId: id,
+        history: listGraphHistory(getWorkingDir(), id),
+      });
       socket.emit("graph-created", newGraph);
     });
 
@@ -80,9 +86,13 @@ export function registerSocketHandlers(io: Server, pluginManager: PluginManager)
       if (fs.existsSync(filePath)) {
         const graph: IGraph = JSON.parse(fs.readFileSync(filePath, "utf-8"));
         graph.name = name;
-        saveGraph(graph);
+        saveGraph(graph, { source: "ui.rename-graph", summary: `rename:${name}` });
         io.emit("graph-list", listGraphs());
         io.to(id).emit("graph-update", toRFGraph(graph));
+        io.to(id).emit("graph-history-updated", {
+          graphId: id,
+          history: listGraphHistory(getWorkingDir(), id),
+        });
       }
     });
 
@@ -120,8 +130,12 @@ export function registerSocketHandlers(io: Server, pluginManager: PluginManager)
             setSelectedNodeId(graphId, null);
             io.to(graphId).emit("graph-selection", { graphId, selectedNodeId: null });
           }
-          saveGraph(graph);
+          saveGraph(graph, { source: "ui.sync-graph", summary: "sync" });
           pluginManager.emitAppEvent("changed", { type: "changed", data: graph });
+          io.to(graphId).emit("graph-history-updated", {
+            graphId,
+            history: listGraphHistory(getWorkingDir(), graphId),
+          });
           socket.to(graphId).emit("graph-update", toRFGraph(graph));
         }
       },

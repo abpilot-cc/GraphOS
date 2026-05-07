@@ -31,6 +31,15 @@ export interface ApiNodeType {
   outTypes?: string[] | '*';
 }
 
+export interface GraphHistoryEntry {
+  id: string;
+  graphId: string;
+  graphName: string;
+  createdAt: string;
+  source: string;
+  summary: string;
+}
+
 export type SchemaEditorFrameMessage = {
   source: 'gso-json-schema-editor';
   type: 'ready' | 'change' | 'error';

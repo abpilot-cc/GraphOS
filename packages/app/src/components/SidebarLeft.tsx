@@ -1,8 +1,8 @@
 import type React from 'react';
 
-import { Activity, Languages, Moon, Pencil, Plus, Sun, Trash2, Zap } from 'lucide-react';
+import { Activity, History, Languages, Moon, Pencil, Plus, RotateCcw, Sun, Trash2, Zap } from 'lucide-react';
 
-import type { NodeType } from '../types/graph';
+import type { GraphHistoryEntry, NodeType } from '../types/graph';
 import { getNodeTypeColor, hexToRgba } from '../utils/nodeType';
 
 interface GraphInfo {
@@ -22,6 +22,9 @@ interface SidebarLeftProps {
   startRenaming: (graph: GraphInfo, e: React.MouseEvent) => void;
   submitRename: (id: string) => void;
   deleteGraph: (id: string, e: React.MouseEvent) => void;
+  graphHistory: GraphHistoryEntry[];
+  restoringHistoryId: string | null;
+  restoreHistory: (recordId: string) => void;
   nodeTypeRegistry: NodeType[];
   theme: 'light' | 'dark';
   toggleTheme: () => void;
@@ -41,6 +44,9 @@ export default function SidebarLeft({
   startRenaming,
   submitRename,
   deleteGraph,
+  graphHistory,
+  restoringHistoryId,
+  restoreHistory,
   nodeTypeRegistry,
   theme,
   toggleTheme,
@@ -147,6 +153,48 @@ export default function SidebarLeft({
                   <div>
                     <div className="text-sm font-semibold">{t(item.label)}</div>
                     <div className="text-[10px] text-text-secondary leading-tight">{t(item.description)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <History className="w-3 h-3 text-text-secondary" />
+            <h2 className="text-xs font-bold text-text-secondary uppercase tracking-wider">{t('sidebar.history')}</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-2">
+            {graphHistory.length === 0 && (
+              <div className="text-xs text-text-secondary px-2 py-3 rounded-lg border border-panel-border bg-canvas-bg/50">
+                {t('sidebar.history_empty')}
+              </div>
+            )}
+
+            {graphHistory.map((entry) => {
+              const isRestoring = restoringHistoryId === entry.id;
+              return (
+                <div
+                  key={entry.id}
+                  className="rounded-lg border border-panel-border p-2.5 bg-canvas-bg/35"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-text-primary truncate">{entry.summary || entry.source}</div>
+                      <div className="text-[10px] text-text-secondary truncate">{entry.source}</div>
+                    </div>
+                    <button
+                      onClick={() => restoreHistory(entry.id)}
+                      disabled={isRestoring}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded border border-panel-border hover:bg-panel-bg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      {isRestoring ? t('sidebar.restoring') : t('sidebar.restore')}
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-text-secondary mt-1.5">
+                    {new Date(entry.createdAt).toLocaleString()}
                   </div>
                 </div>
               );

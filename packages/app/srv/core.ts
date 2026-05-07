@@ -2,6 +2,7 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 import type { IGraph, INode, IEdge, INodeType } from "graphos-core";
+import { appendGraphHistory, deleteGraphHistory } from "./history.ts";
 
 // --- IGraph <-> ReactFlow conversion ---
 
@@ -122,6 +123,12 @@ export type GraphSelectionState = {
   selectedNodeId: string | null;
 };
 
+export type SaveGraphOptions = {
+  source?: string;
+  summary?: string;
+  skipHistory?: boolean;
+};
+
 // --- Filesystem Helpers ---
 
 export const GRAPH_EXT = ".graph.json";
@@ -224,12 +231,16 @@ export function listGraphs(): { id: string; name: string }[] {
   }
 }
 
-export function saveGraph(graph: GraphData) {
+export function saveGraph(graph: GraphData, options: SaveGraphOptions = {}) {
   const normalizedName = normalizeGraphFileName(graph.name || graph.id);
   const targetFilePath = path.join(getWorkingDir(), `${normalizedName}${GRAPH_EXT}`);
   const existingFilePaths = findGraphFilePathsById(graph.id);
 
   fs.writeFileSync(targetFilePath, JSON.stringify(graph, null, 2));
+
+  if (!options.skipHistory) {
+    appendGraphHistory(getWorkingDir(), graph, options.source ?? "unknown", options.summary);
+  }
 
   for (const existingFilePath of existingFilePaths) {
     if (existingFilePath !== targetFilePath && fs.existsSync(existingFilePath)) {
@@ -240,8 +251,12 @@ export function saveGraph(graph: GraphData) {
 
 export function deleteGraphFile(idOrName: string) {
   const filePath = getGraphFilePath(idOrName);
+  const existing = loadGraph(idOrName);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
+  }
+  if (existing?.id) {
+    deleteGraphHistory(getWorkingDir(), existing.id);
   }
 }
 

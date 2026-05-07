@@ -4,6 +4,7 @@ import { validateNode } from "graphos-core";
 import type { INode } from "graphos-core";
 import type { PluginManager } from "../plugin-manager.ts";
 import {
+  getWorkingDir,
   TransactionSchema,
   getGraphSelectionState,
   loadGraph,
@@ -12,6 +13,7 @@ import {
   setSelectedNodeId,
   toRFGraph,
 } from "../core.ts";
+import { listGraphHistory } from "../history.ts";
 
 export function handlePostGraphApply(io: Server, pluginManager: PluginManager) {
   return (req: Request, res: Response) => {
@@ -168,8 +170,15 @@ export function handlePostGraphApply(io: Server, pluginManager: PluginManager) {
     }
 
     if (applied.length > 0) {
-      saveGraph(graph);
+      saveGraph(graph, {
+        source: "api.apply",
+        summary: applied.join(", "),
+      });
       io.to(graphId).emit("graph-update", toRFGraph(graph));
+      io.to(graphId).emit("graph-history-updated", {
+        graphId,
+        history: listGraphHistory(getWorkingDir(), graphId),
+      });
       pluginManager.emitAppEvent("changed", { type: "changed", data: graph });
     }
 

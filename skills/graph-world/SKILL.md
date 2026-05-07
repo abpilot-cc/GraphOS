@@ -43,6 +43,9 @@ These rules are hard constraints for any change workflow:
    - Run the Step 4 closure checks and ensure all closure dimensions pass.
 3. Only after closed-loop validation passes, proceed to any other tasks.
    - If closure fails, return to Graph patching first; do not continue with non-Graph work.
+4. After every successful graph change, update `gen/README.md` with a change record.
+   - Record what was added/modified/removed and why.
+   - Append to the change log section; do not overwrite previous records.
 
 ## Procedure
 
@@ -202,6 +205,37 @@ Completion check:
 - No unresolved critical gap remains.
 - Final graph description matches intended domain design.
 
+### Step 5: Update gen/README.md Change Log
+
+Goal: persist a human-readable record of every graph mutation session.
+
+1. Open (or create) `gen/README.md`.
+2. Append a new change record under a `## Change Log` section using the format below:
+
+```markdown
+### YYYY-MM-DD — <short summary>
+
+**Added**
+- <node type> `<node name>` under `<parent>`: <reason>
+
+**Modified**
+- <node type> `<node name>`: <what changed and why>
+
+**Removed**
+- <node type> `<node name>`: <reason>
+
+**Notes**
+- <any closure gaps deferred, design decisions, or follow-up items>
+```
+
+3. Do not overwrite previous records — always append.
+4. Keep each entry concise (one line per node change is sufficient).
+
+Completion check:
+- `gen/README.md` exists and contains an up-to-date change record for this session.
+- All added/modified/removed nodes are listed.
+- Deferred items or known gaps are noted.
+
 ## Quality Gates (Final Review)
 
 1. Structure gate: exactly one World root and coherent Context tree.
@@ -253,5 +287,6 @@ flowchart TD
    O -- Yes --> Q[Quality Gates Final Review]
    Q --> R{All gates passed?}
    R -- No --> J
-   R -- Yes --> S[Output final verification summary\nClosed-loop model complete]
+   R -- Yes --> T[Step 5\nUpdate gen/README.md change log]
+   T --> S[Output final verification summary\nClosed-loop model complete]
 ```

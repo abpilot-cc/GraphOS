@@ -30,6 +30,7 @@ import type {
   NodeType,
   SchemaEditorFrameMessage,
 } from './types/graph';
+import type { GraphHistoryEntry } from './types/graph';
 import {
   attachNodeIOFromRegistry,
   generateNodeName,
@@ -75,6 +76,9 @@ function GraphOS() {
   const [advancedSchemaDraft, setAdvancedSchemaDraft] = useState<unknown>(null);
   const [jsonSchemaDrafts, setJsonSchemaDrafts] = useState<Record<string, string>>({});
   const [nodeValidationErrors, setNodeValidationErrors] = useState<Record<string, string | undefined>>({});
+  const [graphHistory, setGraphHistory] = useState<GraphHistoryEntry[]>([]);
+  const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
+  const currentGraphIdRef = useRef(currentGraphId);
 
   const normalizeSchemaValue = useCallback((raw: unknown): unknown => {
     if (typeof raw === 'string') {
@@ -98,6 +102,17 @@ function GraphOS() {
     if (!advancedSchemaTarget) return '';
     return buildSchemaEditorIframeDoc(advancedSchemaDraft ?? {});
   }, [advancedSchemaDraft, advancedSchemaTarget]);
+
+  const fetchGraphHistory = useCallback(async (graphId: string) => {
+    try {
+      const response = await fetch(`/api/graph/history?graphId=${encodeURIComponent(graphId)}`);
+      if (!response.ok) return;
+      const payload = await response.json() as { history?: GraphHistoryEntry[] };
+      setGraphHistory(Array.isArray(payload.history) ? payload.history : []);
+    } catch (e) {
+      console.error('[GraphOS] Failed to fetch graph history:', e);
+    }
+  }, []);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -132,6 +147,10 @@ function GraphOS() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('gso-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    currentGraphIdRef.current = currentGraphId;
+  }, [currentGraphId]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
@@ -193,10 +212,20 @@ function GraphOS() {
       setSelectedNodeId(remoteSelectedNodeId);
     });
 
+    newSocket.on('graph-history-updated', ({ graphId, history }: { graphId: string; history: GraphHistoryEntry[] }) => {
+      if (graphId !== currentGraphIdRef.current) return;
+      setGraphHistory(Array.isArray(history) ? history : []);
+    });
+
     return () => {
       newSocket.close();
     };
   }, [setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!currentGraphId) return;
+    void fetchGraphHistory(currentGraphId);
+  }, [currentGraphId, fetchGraphHistory]);
 
   useEffect(() => {
     if (socket) {
@@ -543,6 +572,42 @@ function GraphOS() {
     setAdvancedSchemaTarget(null);
   };
 
+  const restoreHistory = useCallback(async (recordId: string) => {
+    if (!recordId) return;
+
+    setRestoringHistoryId(recordId);
+    try {
+      const response = await fetch('/api/graph/history/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ graphId: currentGraphId, recordId }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Restore failed with status ${response.status}`);
+      }
+
+      const payload = await response.json() as {
+        graph?: { nodes?: Node[]; edges?: Edge[] };
+        history?: GraphHistoryEntry[];
+      };
+
+      const restoredNodes = Array.isArray(payload.graph?.nodes) ? payload.graph.nodes : [];
+      const restoredEdges = Array.isArray(payload.graph?.edges) ? payload.graph.edges : [];
+      const hydratedNodes = attachNodeIOFromRegistry(restoredNodes, nodeTypeRegistry);
+      setNodes(hydratedNodes);
+      nodesRef.current = hydratedNodes as Node[];
+      setEdges(restoredEdges as Edge[]);
+      edgesRef.current = restoredEdges as Edge[];
+
+      setGraphHistory(Array.isArray(payload.history) ? payload.history : []);
+    } catch (e) {
+      console.error('[GraphOS] Failed to restore graph history:', e);
+    } finally {
+      setRestoringHistoryId(null);
+    }
+  }, [currentGraphId, nodeTypeRegistry, setEdges, setNodes]);
+
   return (
     <div className="flex h-screen w-full bg-canvas-bg overflow-hidden font-sans">
       <SidebarLeft
@@ -557,6 +622,9 @@ function GraphOS() {
         startRenaming={startRenaming}
         submitRename={submitRename}
         deleteGraph={deleteGraph}
+        graphHistory={graphHistory}
+        restoringHistoryId={restoringHistoryId}
+        restoreHistory={restoreHistory}
         nodeTypeRegistry={nodeTypeRegistry}
         theme={theme}
         toggleTheme={toggleTheme}
