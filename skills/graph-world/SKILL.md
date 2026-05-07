@@ -33,6 +33,17 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 2. Read available node types and current graph state before mutation.
 3. Use one coherent transaction per design step when possible.
 
+## Modification Rules (Mandatory Order)
+
+These rules are hard constraints for any change workflow:
+
+1. Data model and data logic changes must be applied to Graph first.
+   - Complete required Context/Variant/System/Event/EventSystem updates in Graph before writing downstream code/docs/tasks.
+2. Validate Graph logic is closed-loop immediately after Graph changes.
+   - Run the Step 4 closure checks and ensure all closure dimensions pass.
+3. Only after closed-loop validation passes, proceed to any other tasks.
+   - If closure fails, return to Graph patching first; do not continue with non-Graph work.
+
 ## Procedure
 
 ### Step 0: Read Current State

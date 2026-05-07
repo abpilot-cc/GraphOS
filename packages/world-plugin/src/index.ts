@@ -93,16 +93,6 @@ export default function install(app: IApp, env: any) {
                 description: "System name used to identify this lifecycle logic unit within the current World/Context.",
                 required: true,
             },
-            "startupEnabled": {
-                type: "boolean",
-                description: "Run on Startup timing. Executes when the system starts.",
-                defaultValue: false,
-            },
-            "startupDescription": {
-                type: "string",
-                description: "Description for Startup timing behavior.",
-                editor: 'textarea',
-            },
             "updateEnabled": {
                 type: "boolean",
                 description: "Run on Update timing. Executes every frame.",
