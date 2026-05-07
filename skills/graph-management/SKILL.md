@@ -1,13 +1,20 @@
+---
+name: graph-management
+description: 'Inspect and mutate GraphOS graphs through HTTP APIs. Use when reading topology, validating node types/plugins, and applying atomic graph transactions with retries on partial success.'
+argument-hint: 'Describe your graph task, e.g. "add a node and connect it to n2 in graph main"'
+user-invocable: true
+---
+
 # GraphOS Skill: graph-management
 
 AI-operable protocol for reading and mutating GraphOS graphs through HTTP-first APIs.
 
-## Purpose
+## When to Use
 
-Use this skill to:
-- inspect graph structure and node relations
-- inspect available node types and plugin status
-- apply atomic graph mutations with transaction semantics
+- Inspect graph structure, node relations, and selected-node context.
+- Validate available node types before write operations.
+- Check plugin runtime status when type schemas appear missing.
+- Apply coherent mutation batches with transaction-like behavior.
 
 ## Runtime Base URL
 
@@ -16,7 +23,7 @@ Default local runtime:
 
 If your environment uses a different host or port, replace the base URL accordingly.
 
-## Tools
+## API Reference
 
 ### get_graph_description
 
@@ -115,21 +122,51 @@ Success response includes:
 - updated graph, nodes, edges
 - aiSummary
 
-## Recommended Agent Workflow
+## Procedure
 
-1. Call get_available_node_types to understand constraints.
-2. Call get_graph_description to build current-state context.
-3. If editing a specific node, call get_graph_node for local topology.
-4. Build one apply_graph_transaction request with all related ops.
-5. Re-read get_graph_description to verify post-state.
+### Step 1: Read Constraints and Current State
 
-## Safety and Planning Rules
+1. Call `get_available_node_types` to learn schema constraints.
+2. Call `get_graph_description` to capture full topology.
+3. If operating on one node area, call `get_graph_node` for local context.
+
+Completion check:
+- Required node types are present.
+- You know exact source/target ids and expected deltas.
+
+### Step 2: Plan the Transaction
+
+1. Build one coherent `apply_graph_transaction` request with all related ops.
+2. Order ops so dependencies are valid (create before connect, disconnect before delete).
+3. Keep ids stable and deterministic for repeatable retries.
+
+Decision points:
+- If a node type is missing, inspect `get_plugins` before retrying writes.
+- If editing risks data loss, narrow ops to intended scope only.
+
+Completion check:
+- Transaction has all required ops and no redundant mutations.
+
+### Step 3: Apply and Verify
+
+1. Submit `apply_graph_transaction`.
+2. Inspect `applied` and `errors` from response.
+3. Re-run `get_graph_description` to verify post-state.
+
+Decision points:
+- If partial success occurs, retry only failed intent instead of replaying the full batch.
+- If validation errors occur, patch payloads to match node schema before retry.
+
+Completion check:
+- Graph topology matches expected post-change state.
+- No unresolved critical errors remain.
+
+## Safety Rules
 
 - Prefer one coherent transaction over many micro calls.
-- Keep node ids stable and unique.
 - Validate node property payloads against node type requirements before submit.
 - For destructive updates, inspect current graph first and include only intended operations.
-- Treat partial success as normal: check errors array and retry only failed intent.
+- Treat partial success as normal: check `errors` and retry only failed intent.
 
 ## Request Examples
 
