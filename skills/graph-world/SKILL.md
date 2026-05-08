@@ -14,7 +14,7 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 ## Node Semantics
 
 - World: Single root context of the whole model.
-- Context: Hierarchical domain/data model node under World or Context.
+- Context: Hierarchical domain/data model node under World or Context. Context belongs to the logical/data layer, not the presentation layer, but should expose the state that the View layer needs to observe.
 - Variant: Typed variable definition under World or Context. Variant is the default design surface for persistent/stored runtime data.
 - System: Lifecycle logic node under World or Context. Temporary cache or ephemeral working state should be handled inside the owning System rather than modeled as stored graph data.
 - Event: World-level event definition.
@@ -80,6 +80,9 @@ Decision points:
 - Prefer `JSONSchema` only for structured objects; otherwise use primitive types.
 - If data must survive as part of the graph-defined state, design it as a `Variant`.
 - If data is only a temporary cache, intermediate computation result, or frame-local working set, keep it inside the relevant `System` instead of adding a `Variant`.
+- Graph design should contain logical/domain state only, not presentation-layer widgets, styles, animations, or rendering concerns.
+- Design `Context` and its `Variant`s so the View layer can react to data changes through observation/binding.
+- If the View depends on explicit runtime states such as loading, selected, active, disabled, visible, phase, or mode, model those as logical state in `Context`/`Variant` rather than leaving them implicit in the presentation layer.
 
 Completion check:
 - Every core domain has a Context owner.
