@@ -104,6 +104,8 @@ Decision points:
 - Place System at the nearest scope that owns the data it mutates.
 - Use `Spawn` for initialization, `Update` for recurring logic, `Change` for reactive sync, `Despawn` for cleanup.
 - Split a System when a single node spans unrelated responsibilities.
+- `System` implementation should contain no presentation-layer logic (rendering, styling, animation, UI orchestration).
+- `System` logic should be driven by `Context`/`Variant` state and domain rules only.
 - Keep temporary cache data internal to the owning `System`; do not promote cache-only state into graph `Variant`s unless it must be stored as part of the domain model.
 
 Completion check:
@@ -139,6 +141,8 @@ Implementation guidance:
 - Keep method behavior aligned with the closure checks in Step 4.
 - Do not implement business logic before Graph data model and ownership are finalized.
 - If Graph changes update generated context types, regenerate types first, then update this System implementation.
+- Keep presentation behavior outside `System`; the View layer should react by observing `Context` data changes.
+- Intermediate cache should be handled privately inside each `System` and should not leak into presentation concerns.
 
 ### Step 3: Define Events and EventSystems
 
