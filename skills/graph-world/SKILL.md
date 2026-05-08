@@ -15,8 +15,8 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 
 - World: Single root context of the whole model.
 - Context: Hierarchical domain/data model node under World or Context.
-- Variant: Typed variable definition under World or Context.
-- System: Lifecycle logic node under World or Context.
+- Variant: Typed variable definition under World or Context. Variant is the default design surface for persistent/stored runtime data.
+- System: Lifecycle logic node under World or Context. Temporary cache or ephemeral working state should be handled inside the owning System rather than modeled as stored graph data.
 - Event: World-level event definition.
 - EventSystem: Event-driven handler under Event.
 
@@ -76,8 +76,10 @@ Goal: create the structural model first, then type its data.
 
 Decision points:
 - Use `Context` when modeling a domain boundary or ownership scope.
-- Use `Variant` when modeling typed data inside a scope.
+- Use `Variant` when modeling typed data inside a scope, especially when the requirement includes storage/persistence.
 - Prefer `JSONSchema` only for structured objects; otherwise use primitive types.
+- If data must survive as part of the graph-defined state, design it as a `Variant`.
+- If data is only a temporary cache, intermediate computation result, or frame-local working set, keep it inside the relevant `System` instead of adding a `Variant`.
 
 Completion check:
 - Every core domain has a Context owner.
@@ -99,6 +101,7 @@ Decision points:
 - Place System at the nearest scope that owns the data it mutates.
 - Use `Spawn` for initialization, `Update` for recurring logic, `Change` for reactive sync, `Despawn` for cleanup.
 - Split a System when a single node spans unrelated responsibilities.
+- Keep temporary cache data internal to the owning `System`; do not promote cache-only state into graph `Variant`s unless it must be stored as part of the domain model.
 
 Completion check:
 - Each implemented lifecycle method has a matching description.
