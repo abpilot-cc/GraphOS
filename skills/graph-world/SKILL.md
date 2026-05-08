@@ -1,13 +1,13 @@
 ---
 name: graph-world
-description: 'Design World/Context/Variant/System/Event/EventSystem graph models for games and applications. Use when creating domain models, lifecycle systems, bootstrap events, and event-driven context initialization in GraphOS. Depends on graph-management skill for graph read/apply APIs.'
-argument-hint: 'Describe your domain and goals, e.g. "RPG world with player inventory and bootstrap initialization"'
+description: 'World logic design tool for GraphOS. Design World/Context/Variant/System/Event/EventSystem graph models for any game or app, focusing on domain logic, lifecycle systems, bootstrap events, and event-driven context initialization. Depends on graph-management skill for graph read/apply APIs.'
+argument-hint: 'Describe your domain and goals, e.g. "Any game or app world model with contexts, variants, systems, and bootstrap initialization"'
 user-invocable: true
 ---
 
 # GraphOS Skill: graph-world
 
-Design a world model in GraphOS using node-first architecture for games and applications.
+Design world logic in GraphOS with a node-first architecture for any game or application.
 
 This skill depends on `graph-management` for graph inspection and transaction apply APIs.
 
@@ -46,6 +46,9 @@ These rules are hard constraints for any change workflow:
 4. After every successful graph change, update `gen/README.md` with a change record.
    - Record what was added/modified/removed and why.
    - Append to the change log section; do not overwrite previous records.
+5. After every successful graph change, update `gen/GRAPH.md` with the complete current process diagram and closure checkpoints.
+   - Keep the diagram in sync with the actual Step 0-6 workflow.
+   - Validate that the diagram remains closed-loop (failed checks route back to patch steps).
 
 ## Procedure
 
@@ -143,6 +146,8 @@ Implementation guidance:
 - If Graph changes update generated context types, regenerate types first, then update this System implementation.
 - Keep presentation behavior outside `System`; the View layer should react by observing `Context` data changes.
 - Intermediate cache should be handled privately inside each `System` and should not leak into presentation concerns.
+- When generating `System` code files, use PascalCase file names and keep them exactly aligned with the graph `System` node `name`.
+- Example: graph node `GameBootstrapSystem` -> file `GameBootstrapSystem.ts`.
 
 ### Step 3: Define Events and EventSystems
 
@@ -186,6 +191,8 @@ Implementation guidance:
 - Ensure Event payload fields are defined in Graph and match `IChickenShootEvent`.
 - Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
 - If Event or payload schema changes in Graph, regenerate `./gen/World.js` types before updating EventSystem code.
+- When generating `EventSystem` code files, use PascalCase file names and keep them exactly aligned with the graph `EventSystem` node `name`.
+- Example: graph node `SpawnBulletOnShootEventSystem` -> file `SpawnBulletOnShootEventSystem.ts`.
 
 ### Step 4: Closed-Loop Validation and Completion
 
@@ -246,6 +253,24 @@ Completion check:
 - All added/modified/removed nodes are listed.
 - Deferred items or known gaps are noted.
 
+### Step 6: Update gen/GRAPH.md Full Flow Diagram
+
+Goal: keep an executable process diagram artifact that reflects the current workflow and closure loop.
+
+1. Open (or create) `gen/GRAPH.md`.
+2. Maintain one complete Mermaid flowchart for the end-to-end process:
+   - Include Step 0 to Step 6.
+   - Include closure dimensions and retry loops for failed checks.
+3. After each graph mutation session, update the diagram if any step, gate, or retry path changed.
+4. Validate closed-loop correctness in the diagram:
+   - Any failed closure/gate must route back to the correct patch step.
+   - Success path must end at final verification summary.
+
+Completion check:
+- `gen/GRAPH.md` exists and contains the latest complete flowchart.
+- The flowchart includes all active steps (0-6) and retry branches.
+- Diagram closure is verified: no broken success/failure path and no missing back-edge.
+
 ## Quality Gates (Final Review)
 
 1. Structure gate: exactly one World root and coherent Context tree.
@@ -253,6 +278,7 @@ Completion check:
 3. Ownership gate: Systems and Variants are attached to the scope that owns their data.
 4. Event gate: Event/EventSystem pairs cover bootstrap and key domain triggers.
 5. Verification gate: re-run `get_graph_description` after each apply and confirm expected node/edge deltas.
+6. Diagram gate: `gen/GRAPH.md` is updated and reflects the current closed-loop workflow.
 
 ## Suggested Prompt Inputs
 
@@ -298,5 +324,6 @@ flowchart TD
    Q --> R{All gates passed?}
    R -- No --> J
    R -- Yes --> T[Step 5\nUpdate gen/README.md change log]
-   T --> S[Output final verification summary\nClosed-loop model complete]
+   T --> U[Step 6\nUpdate gen/GRAPH.md full flowchart\nand verify diagram closed-loop]
+   U --> S[Output final verification summary\nClosed-loop model complete]
 ```
