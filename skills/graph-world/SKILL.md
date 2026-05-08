@@ -13,7 +13,7 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 
 ## Node Semantics
 
-- World: Single root context of the whole model.
+- World: Single root context of the whole model. The World node name is fixed to `World`.
 - Context: Hierarchical domain/data model node under World or Context. Context belongs to the logical/data layer, not the presentation layer, but should expose the state that the View layer needs to observe. Context also has built-in storage semantics, so logic should prefer reusing existing Context instances/state before creating new ones.
 - Variant: Typed variable definition under World or Context. Variant is the default design surface for persistent/stored runtime data.
 - System: Lifecycle logic node under World or Context. Temporary cache or ephemeral working state should be handled inside the owning System rather than modeled as stored graph data.
@@ -67,6 +67,7 @@ Completion check:
 Goal: create the structural model first, then type its data.
 
 1. Ensure exactly one `World` root exists.
+   - The root node name must be exactly `World`; do not rename it or create alternative root names.
 2. Create `Context` tree by domain boundaries:
    - Broad to specific: e.g. `Gameplay` -> `Player` -> `Inventory`.
    - Keep sibling contexts cohesive and low-coupling.
