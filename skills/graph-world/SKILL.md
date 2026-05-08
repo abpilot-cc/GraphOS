@@ -149,6 +149,8 @@ Implementation guidance:
 - When generating `System` code files, use PascalCase file names and keep them exactly aligned with the graph `System` node `name`.
 - Example: graph node `GameBootstrapSystem` -> file `GameBootstrapSystem.ts`.
 - Since `Context` provides storage capability, implement a get-or-create pattern in `System` logic: fetch existing Context/state first, and create/initialize only when missing.
+- For singleton `Context` access in `System` implementations, use a fixed id with `get...ById('id')`.
+- Do not fetch singleton `Context` instances through positional access such as `get...Children()[0]`, because order-based lookup is unstable and obscures identity.
 
 ### Step 3: Define Events and EventSystems
 
@@ -195,6 +197,8 @@ Implementation guidance:
 - When generating `EventSystem` code files, use PascalCase file names and keep them exactly aligned with the graph `EventSystem` node `name`.
 - Example: graph node `SpawnBulletOnShootEventSystem` -> file `SpawnBulletOnShootEventSystem.ts`.
 - Since `Context` provides storage capability, `EventSystem` handlers should fetch target Context/state first and create/initialize only when it does not exist.
+- For singleton `Context` access in `EventSystem` implementations, use a fixed id with `get...ById('id')`.
+- Do not resolve singleton `Context` instances through `get...Children()[0]` or any other position-based child lookup.
 
 ### Step 4: Closed-Loop Validation and Completion
 
