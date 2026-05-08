@@ -14,7 +14,7 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 ## Node Semantics
 
 - World: Single root context of the whole model.
-- Context: Hierarchical domain/data model node under World or Context. Context belongs to the logical/data layer, not the presentation layer, but should expose the state that the View layer needs to observe.
+- Context: Hierarchical domain/data model node under World or Context. Context belongs to the logical/data layer, not the presentation layer, but should expose the state that the View layer needs to observe. Context also has built-in storage semantics, so logic should prefer reusing existing Context instances/state before creating new ones.
 - Variant: Typed variable definition under World or Context. Variant is the default design surface for persistent/stored runtime data.
 - System: Lifecycle logic node under World or Context. Temporary cache or ephemeral working state should be handled inside the owning System rather than modeled as stored graph data.
 - Event: World-level event definition.
@@ -148,6 +148,7 @@ Implementation guidance:
 - Intermediate cache should be handled privately inside each `System` and should not leak into presentation concerns.
 - When generating `System` code files, use PascalCase file names and keep them exactly aligned with the graph `System` node `name`.
 - Example: graph node `GameBootstrapSystem` -> file `GameBootstrapSystem.ts`.
+- Since `Context` provides storage capability, implement a get-or-create pattern in `System` logic: fetch existing Context/state first, and create/initialize only when missing.
 
 ### Step 3: Define Events and EventSystems
 
@@ -193,6 +194,7 @@ Implementation guidance:
 - If Event or payload schema changes in Graph, regenerate `./gen/World.js` types before updating EventSystem code.
 - When generating `EventSystem` code files, use PascalCase file names and keep them exactly aligned with the graph `EventSystem` node `name`.
 - Example: graph node `SpawnBulletOnShootEventSystem` -> file `SpawnBulletOnShootEventSystem.ts`.
+- Since `Context` provides storage capability, `EventSystem` handlers should fetch target Context/state first and create/initialize only when it does not exist.
 
 ### Step 4: Closed-Loop Validation and Completion
 
