@@ -124,6 +124,7 @@ import type { GameplayContext } from './gen/World.js'; // graph auto-generated T
 import type { ISystem } from 'graphos-world-plugin';
 
 export function createGameBootstrapSystem(): ISystem<GameplayContext> {
+   // optional internal cache for the System; not exposed to presentation layer
    return {
       spawn(ctx: GameplayContext): void {
          // TODO
@@ -169,6 +170,7 @@ Decision points:
 - Create an `Event` for cross-context or explicit trigger boundaries.
 - Use `EventSystem` when handling should be decoupled from per-frame System logic.
 - For bootstrap flows, prefer an explicit startup/boot event plus handler.
+- For UI-facing events, keep the Event data model as small as possible and prefer defining no payload fields unless data is strictly required.
 
 Completion check:
 - Every critical trigger has an Event.
@@ -184,6 +186,7 @@ import type { ISystem } from 'graphos-world-plugin';
 export type SpawnBulletOnShootEventSystem = ISystem<ChickenMergeLiteWorldContext, IChickenShootEvent>;
 
 export function createSpawnBulletOnShootEventSystem(): SpawnBulletOnShootEventSystem {
+   // optional internal cache for the System; not exposed to presentation layer
    return {
       handle(event: IChickenShootEvent): void {
          // TODO
@@ -194,6 +197,7 @@ export function createSpawnBulletOnShootEventSystem(): SpawnBulletOnShootEventSy
 
 Implementation guidance:
 - Ensure Event payload fields are defined in Graph and match `IChickenShootEvent`.
+- For events consumed mainly by the presentation/UI layer, prefer signal-style Events with no payload; add fields only when the UI cannot derive the required state from `Context`.
 - Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
 - If Event or payload schema changes in Graph, regenerate `./gen/World.js` types before updating EventSystem code.
 - When generating `EventSystem` code files, use PascalCase file names and keep them exactly aligned with the graph `EventSystem` node `name`.
