@@ -151,6 +151,7 @@ Implementation guidance:
 - Since `Context` provides storage capability, implement a get-or-create pattern in `System` logic: fetch existing Context/state first, and create/initialize only when missing.
 - For singleton `Context` access in `System` implementations, use a fixed id with `get...ById('id')`.
 - Do not fetch singleton `Context` instances through positional access such as `get...Children()[0]`, because order-based lookup is unstable and obscures identity.
+- After implementing a `System`, register it in `src/app.ts` with `app.addSystem(...)`; generated code is not complete until runtime registration is wired.
 
 ### Step 3: Define Events and EventSystems
 
@@ -199,6 +200,28 @@ Implementation guidance:
 - Since `Context` provides storage capability, `EventSystem` handlers should fetch target Context/state first and create/initialize only when it does not exist.
 - For singleton `Context` access in `EventSystem` implementations, use a fixed id with `get...ById('id')`.
 - Do not resolve singleton `Context` instances through `get...Children()[0]` or any other position-based child lookup.
+- After implementing an `EventSystem`, register it in `src/app.ts` with `app.addEventSystem(...)`; event handlers are incomplete until the app entry wires them.
+
+Application registration example (`src/app.ts`):
+
+```ts
+import { App } from 'graphos-world-plugin';
+import { MatchLoopContext, WorldContext } from '../gen/World';
+import { createMatchLifecycleSystem } from './MatchLifecycleSystem';
+import { createApplyConfigHotReloadEventSystem } from './ApplyConfigHotReloadEventSystem';
+
+export default function (app: App): WorldContext {
+   app.addSystem(MatchLoopContext.Table, createMatchLifecycleSystem());
+   app.addEventSystem('ConfigHotReloadRequested', createApplyConfigHotReloadEventSystem());
+   return WorldContext.default(app.ctx, app.cache)!;
+}
+```
+
+Registration guidance:
+- Register every generated `System` and `EventSystem` in `src/app.ts`.
+- Keep imported symbol names aligned with the generated PascalCase file names and graph node names.
+- Use the owning Context table when calling `app.addSystem(...)`.
+- Use the exact graph `Event` name when calling `app.addEventSystem(...)`.
 
 ### Step 4: Closed-Loop Validation and Completion
 
