@@ -39,7 +39,7 @@ function makePluginApp(expressApp: Express): { app: IApp; nodeTypes: INodeType[]
     },
     on<K extends keyof IAppEvents>(event: K, listener: (event: IAppEvents[K]) => void): IApp {
       const list = listeners.get(event) ?? [];
-      list.push(listener);
+      list.push(listener as any);
       listeners.set(event, list);
       return app;
     },
@@ -277,7 +277,7 @@ export class PluginManager extends EventEmitter {
           maybeOn(event, listener);
         }
         const list = appListeners.get(event) ?? [];
-        list.push(listener);
+        list.push(listener as any);
         appListeners.set(event, list);
         return compatApp;
       },

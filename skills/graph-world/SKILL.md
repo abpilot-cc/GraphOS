@@ -148,6 +148,8 @@ Implementation guidance:
 - If Graph changes update generated context types, regenerate types first, then update this System implementation.
 - Keep presentation behavior outside `System`; the View layer should react by observing `Context` data changes.
 - Intermediate cache should be handled privately inside each `System` and should not leak into presentation concerns.
+- Put shared data contracts, constants, and Context singleton ids/names used by generated `System` code into `src/types.ts`, then import them from `System` files.
+- Put runtime configuration into `src/config.ts` and read it from generated `System` logic; prefer configurable defaults over hard-coded values.
 - When generating `System` code files, use PascalCase file names and keep them exactly aligned with the graph `System` node `name`.
 - Example: graph node `GameBootstrapSystem` -> file `GameBootstrapSystem.ts`.
 - Since `Context` provides storage capability, implement a get-or-create pattern in `System` logic: fetch existing Context/state first, and create/initialize only when missing.
@@ -200,6 +202,8 @@ Implementation guidance:
 - For events consumed mainly by the presentation/UI layer, prefer signal-style Events with no payload; add fields only when the UI cannot derive the required state from `Context`.
 - Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
 - If Event or payload schema changes in Graph, regenerate `./gen/World.js` types before updating EventSystem code.
+- Put shared data contracts, constants, and Context singleton ids/names used by generated `EventSystem` code into `src/types.ts`, then import them from `EventSystem` files.
+- Put runtime configuration into `src/config.ts` and read it from generated `EventSystem` logic; prefer configurable defaults over hard-coded values.
 - When generating `EventSystem` code files, use PascalCase file names and keep them exactly aligned with the graph `EventSystem` node `name`.
 - Example: graph node `SpawnBulletOnShootEventSystem` -> file `SpawnBulletOnShootEventSystem.ts`.
 - Since `Context` provides storage capability, `EventSystem` handlers should fetch target Context/state first and create/initialize only when it does not exist.

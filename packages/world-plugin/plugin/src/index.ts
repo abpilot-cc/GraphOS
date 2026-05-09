@@ -333,3 +333,34 @@ export class App {
     }
 
 }
+
+export class MemStorage implements IStorage {
+    private readonly _store: Map<string, any> = new Map();
+    get(key: string) {
+        return this._store.get(key);
+    }
+    set(key: string, value: any): void {
+        this._store.set(key, value);
+    }
+    del(key: string): void {
+        this._store.delete(key);
+    }
+}
+
+/** @noSelf **/
+export type Tick = (deltaTime: number) => boolean;
+
+
+/** @noSelf **/
+export function newTick(time: number): Tick {
+    let elapsed = 0;
+    return (deltaTime: number) => {
+        elapsed += deltaTime;
+        if (elapsed >= time) {
+            elapsed = 0;
+            return true;
+        }
+        return false;
+    };
+}
+

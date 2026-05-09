@@ -1,6 +1,6 @@
 import type React from 'react';
 
-import { Activity, History, Languages, Moon, Pencil, Plus, RotateCcw, Sun, Trash2, Zap } from 'lucide-react';
+import { Activity, Copy, History, Languages, Moon, Pencil, Plus, RotateCcw, Sun, Trash2, Zap } from 'lucide-react';
 
 import type { GraphHistoryEntry, NodeType } from '../types/graph';
 import { getNodeTypeColor, hexToRgba } from '../utils/nodeType';
@@ -19,6 +19,7 @@ interface SidebarLeftProps {
   setTempGraphName: (name: string) => void;
   createNewGraph: () => void;
   setCurrentGraphId: (id: string) => void;
+  duplicateGraph: (id: string, e: React.MouseEvent) => void;
   startRenaming: (graph: GraphInfo, e: React.MouseEvent) => void;
   submitRename: (id: string) => void;
   deleteGraph: (id: string, e: React.MouseEvent) => void;
@@ -41,6 +42,7 @@ export default function SidebarLeft({
   setTempGraphName,
   createNewGraph,
   setCurrentGraphId,
+  duplicateGraph,
   startRenaming,
   submitRename,
   deleteGraph,
@@ -101,6 +103,9 @@ export default function SidebarLeft({
 
                 {!editingGraphId && (
                   <div className={`absolute right-2 flex items-center gap-1 transition-opacity ${currentGraphId === g.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    <button onClick={(e) => duplicateGraph(g.id, e)} className="p-1 hover:bg-black/10 rounded transition-colors text-current" title={t('sidebar.duplicate')}>
+                      <Copy className="w-3 h-3" />
+                    </button>
                     <button onClick={(e) => startRenaming(g, e)} className="p-1 hover:bg-black/10 rounded transition-colors text-current">
                       <Pencil className="w-3 h-3" />
                     </button>

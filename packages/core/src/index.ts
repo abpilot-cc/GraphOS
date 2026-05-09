@@ -1,6 +1,7 @@
 import { Ajv } from 'ajv';
 import type { AnySchema } from 'ajv';
 import type { Express } from "express";
+import type SocketIO from "socket.io";
 
 export interface INode {
     readonly id: string;
@@ -38,13 +39,25 @@ export interface IGraph {
     edges: IEdge[];
 }
 
+export interface IAppEventOpen {
+    type: 'open';
+    data: IGraph;
+}
+
 export interface IAppEventChanged {
     type: 'changed';
     data: IGraph;
 }
 
+export interface IAppEventSocket {
+    type: 'socket';
+    socket: SocketIO.Socket;
+}
+
 export interface IAppEvents {
+    open: IAppEventOpen;
     changed: IAppEventChanged;
+    socket: IAppEventSocket;
 }
 
 export type AppEvent = keyof IAppEvents;

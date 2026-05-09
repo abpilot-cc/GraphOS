@@ -61,7 +61,7 @@ function GraphOS() {
   const [tempGraphName, setTempGraphName] = useState('');
   const [nodeTypeRegistry, setNodeTypeRegistry] = useState<NodeType[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('gso-theme');
+    const saved = localStorage.getItem('app-theme');
     if (saved === 'dark' || saved === 'light') return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
@@ -198,7 +198,8 @@ function GraphOS() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('gso-theme', theme);
+    localStorage.setItem('app-theme', theme);
+    window.dispatchEvent(new Event('app-theme'));
   }, [theme]);
 
   useEffect(() => {
@@ -210,7 +211,7 @@ function GraphOS() {
   };
 
   useEffect(() => {
-    const savedLang = localStorage.getItem('gso-lang') || 'en';
+    const savedLang = localStorage.getItem('app-lang') || 'en';
     if (i18n.language !== savedLang) {
       i18n.changeLanguage(savedLang);
     }
@@ -218,7 +219,8 @@ function GraphOS() {
 
   const changeLanguage = (lang: string) => {
     i18n.changeLanguage(lang);
-    localStorage.setItem('gso-lang', lang);
+    localStorage.setItem('app-lang', lang);
+    window.dispatchEvent(new Event('app-lang'));
   };
 
   useEffect(() => {
@@ -598,6 +600,11 @@ function GraphOS() {
     socket?.emit('create-graph', 'Untitled Graph');
   };
 
+  const duplicateGraph = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    socket?.emit('duplicate-graph', id);
+  };
+
   const startRenaming = (g: { id: string; name: string }, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingGraphId(g.id);
@@ -687,6 +694,7 @@ function GraphOS() {
         setTempGraphName={setTempGraphName}
         createNewGraph={createNewGraph}
         setCurrentGraphId={setCurrentGraphId}
+        duplicateGraph={duplicateGraph}
         startRenaming={startRenaming}
         submitRename={submitRename}
         deleteGraph={deleteGraph}

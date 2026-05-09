@@ -24,9 +24,25 @@ import {
 } from "./core.ts";
 import { listGraphHistory } from "./history.ts";
 
+function buildDuplicatedGraphName(sourceName: string) {
+  const existingNames = new Set(listGraphs().map((graph) => graph.name));
+  const baseName = sourceName.trim().length > 0 ? sourceName.trim() : "Untitled Graph";
+  let candidate = `${baseName} Copy`;
+  let suffix = 2;
+
+  while (existingNames.has(candidate)) {
+    candidate = `${baseName} Copy ${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
 export function registerSocketHandlers(io: Server, pluginManager: PluginManager) {
   io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
+
+    pluginManager.emitAppEvent("socket", { type: "socket", socket });
 
     socket.on("get-graph-list", () => {
       const list = listGraphs();
@@ -61,6 +77,7 @@ export function registerSocketHandlers(io: Server, pluginManager: PluginManager)
       if (fs.existsSync(filePath)) {
         const graph: IGraph = JSON.parse(fs.readFileSync(filePath, "utf-8"));
         socket.emit("graph-initial", toRFGraph(graph));
+        pluginManager.emitAppEvent("open", { type: "open", data: graph });
       } else {
         console.warn(`Graph file not found: ${filePath}`);
       }
@@ -78,6 +95,42 @@ export function registerSocketHandlers(io: Server, pluginManager: PluginManager)
         history: listGraphHistory(getWorkingDir(), id),
       });
       socket.emit("graph-created", newGraph);
+      pluginManager.emitAppEvent("open", { type: "open", data: newGraph });
+    });
+
+    socket.on("duplicate-graph", (id: string) => {
+      const sourceGraph = loadGraph(id);
+      if (!sourceGraph) {
+        socket.emit("graph-error", { message: `Graph not found: ${id}` });
+        return;
+      }
+
+      const nextId = `graph_${Date.now()}`;
+      const duplicatedGraph: GraphData = {
+        ...sourceGraph,
+        id: nextId,
+        name: buildDuplicatedGraphName(sourceGraph.name),
+        nodes: sourceGraph.nodes.map((node) => ({
+          ...node,
+          properties: { ...(node.properties ?? {}) },
+          position: [...node.position] as [number, number],
+        })),
+        edges: sourceGraph.edges.map((edge) => [...edge] as [string, string]),
+      };
+
+      saveGraph(duplicatedGraph, {
+        source: "ui.duplicate-graph",
+        summary: `duplicate:${sourceGraph.id}`,
+      });
+      setCurrentOpenGraphId(nextId);
+
+      io.emit("graph-list", listGraphs());
+      io.to(nextId).emit("graph-history-updated", {
+        graphId: nextId,
+        history: listGraphHistory(getWorkingDir(), nextId),
+      });
+      socket.emit("graph-created", duplicatedGraph);
+      pluginManager.emitAppEvent("open", { type: "open", data: duplicatedGraph });
     });
 
     socket.on("rename-graph", ({ id, name }: { id: string; name: string }) => {
