@@ -40,6 +40,20 @@ export interface GraphHistoryEntry {
   summary: string;
 }
 
+export interface PluginTab {
+  id: string;
+  label: string;
+  url: string;
+}
+
+export interface ApiPluginSummary {
+  name: string;
+  status: 'loaded' | 'error' | 'unloaded';
+  error?: string;
+  nodeTypeCount: number;
+  tabs?: PluginTab[];
+}
+
 export type SchemaEditorFrameMessage = {
   source: 'gso-json-schema-editor';
   type: 'ready' | 'change' | 'error';

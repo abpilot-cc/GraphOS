@@ -15,9 +15,10 @@
     "build": "tsc"
   },
   "dependencies": {
-    "graphos-core": "^1.0.1"
+    "graphos-core": "^1.0.3"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^25.6.0",
     "typescript": "^6.0.3"
   },

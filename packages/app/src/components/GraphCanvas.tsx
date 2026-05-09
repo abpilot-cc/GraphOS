@@ -46,7 +46,7 @@ export default function GraphCanvas({
   t,
 }: GraphCanvasProps) {
   return (
-    <main className="flex-1 relative" ref={reactFlowWrapper}>
+    <main className="relative h-full w-full" ref={reactFlowWrapper}>
       <ReactFlow
         nodes={nodes}
         edges={edges}

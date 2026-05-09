@@ -25,9 +25,11 @@ import PropertiesPanel from './components/PropertiesPanel';
 import SchemaEditorModal from './components/SchemaEditorModal';
 import SidebarLeft from './components/SidebarLeft';
 import type {
+  ApiPluginSummary,
   ApiNodeType,
   NodeData,
   NodeType,
+  PluginTab,
   SchemaEditorFrameMessage,
 } from './types/graph';
 import type { GraphHistoryEntry } from './types/graph';
@@ -78,7 +80,27 @@ function GraphOS() {
   const [nodeValidationErrors, setNodeValidationErrors] = useState<Record<string, string | undefined>>({});
   const [graphHistory, setGraphHistory] = useState<GraphHistoryEntry[]>([]);
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
+  const [pluginTabs, setPluginTabs] = useState<PluginTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState('graph');
   const currentGraphIdRef = useRef(currentGraphId);
+  const graphTab = useMemo(() => ({ id: 'graph', label: 'Graph', kind: 'graph' as const }), []);
+
+  const tabs = useMemo(() => {
+    const pluginTabItems = pluginTabs.map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      kind: 'iframe' as const,
+      url: tab.url,
+    }));
+
+    return [graphTab, ...pluginTabItems];
+  }, [graphTab, pluginTabs]);
+
+  const activeTab = useMemo(() => {
+    return tabs.find((tab) => tab.id === activeTabId) ?? graphTab;
+  }, [tabs, activeTabId, graphTab]);
+
+  const isGraphTabActive = activeTab?.kind === 'graph';
 
   const normalizeSchemaValue = useCallback((raw: unknown): unknown => {
     if (typeof raw === 'string') {
@@ -111,6 +133,37 @@ function GraphOS() {
       setGraphHistory(Array.isArray(payload.history) ? payload.history : []);
     } catch (e) {
       console.error('[GraphOS] Failed to fetch graph history:', e);
+    }
+  }, []);
+
+  const fetchPluginTabs = useCallback(async () => {
+    try {
+      const response = await fetch('/api/plugins');
+      if (!response.ok) {
+        setPluginTabs([]);
+        return;
+      }
+
+      const payload = await response.json() as ApiPluginSummary[];
+      if (!Array.isArray(payload)) {
+        setPluginTabs([]);
+        return;
+      }
+
+      const nextTabs = payload
+        .flatMap((plugin) => (Array.isArray(plugin.tabs) ? plugin.tabs : []))
+        .filter((tab): tab is PluginTab => {
+          return (
+            typeof tab.id === 'string' && tab.id.trim().length > 0 &&
+            typeof tab.label === 'string' && tab.label.trim().length > 0 &&
+            typeof tab.url === 'string' && tab.url.trim().length > 0
+          );
+        });
+
+      setPluginTabs(nextTabs);
+    } catch (e) {
+      console.error('[GraphOS] Failed to fetch plugin tabs:', e);
+      setPluginTabs([]);
     }
   }, []);
 
@@ -226,6 +279,21 @@ function GraphOS() {
     if (!currentGraphId) return;
     void fetchGraphHistory(currentGraphId);
   }, [currentGraphId, fetchGraphHistory]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    void fetchPluginTabs();
+  }, [isConnected, nodeTypeRegistry, fetchPluginTabs]);
+
+  useEffect(() => {
+    if (tabs.some((tab) => tab.id === activeTabId)) return;
+    setActiveTabId('graph');
+  }, [tabs, activeTabId]);
+
+  useEffect(() => {
+    if (isGraphTabActive) return;
+    setSelectedNodeId(null);
+  }, [isGraphTabActive]);
 
   useEffect(() => {
     if (socket) {
@@ -632,25 +700,58 @@ function GraphOS() {
         changeLanguage={changeLanguage}
       />
 
-      <GraphCanvas
-        reactFlowWrapper={reactFlowWrapper}
-        nodes={nodes as Node[]}
-        edges={edges as Edge[]}
-        nodeTypes={nodeTypes}
-        isConnectionAllowed={isConnectionAllowed}
-        onGraphNodesChange={onGraphNodesChange}
-        onGraphEdgesChange={onGraphEdgesChange}
-        onNodeDragStop={onNodeDragStop}
-        onConnect={onConnect}
-        onSelectionChange={onSelectionChange}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        onInit={() => socket?.emit('join-graph', currentGraphId)}
-        t={t}
-      />
+      <section className="flex-1 min-w-0 flex flex-col border-r border-panel-border">
+        <div className="h-14 border-b border-panel-border bg-panel-bg px-3 flex items-end gap-2 overflow-x-auto">
+          {tabs.map((tab) => {
+            const active = tab.id === activeTab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTabId(tab.id)}
+                className={`h-10 px-4 rounded-t-lg border border-b-0 text-sm font-semibold whitespace-nowrap transition-colors ${active
+                  ? 'bg-canvas-bg text-text-primary border-panel-border'
+                  : 'bg-transparent text-text-secondary border-transparent hover:bg-canvas-bg/60 hover:text-text-primary'
+                  }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex-1 min-h-0 relative">
+          {isGraphTabActive ? (
+            <GraphCanvas
+              reactFlowWrapper={reactFlowWrapper}
+              nodes={nodes as Node[]}
+              edges={edges as Edge[]}
+              nodeTypes={nodeTypes}
+              isConnectionAllowed={isConnectionAllowed}
+              onGraphNodesChange={onGraphNodesChange}
+              onGraphEdgesChange={onGraphEdgesChange}
+              onNodeDragStop={onNodeDragStop}
+              onConnect={onConnect}
+              onSelectionChange={onSelectionChange}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onInit={() => socket?.emit('join-graph', currentGraphId)}
+              t={t}
+            />
+          ) : (
+            <iframe
+              title={activeTab.label}
+              src={activeTab.url}
+              className="absolute inset-0 h-full w-full border-0 bg-panel-bg"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
+          )}
+        </div>
+      </section>
 
       <PropertiesPanel
-        selectedNode={selectedNode as Node | undefined}
+        selectedNode={isGraphTabActive ? (selectedNode as Node | undefined) : undefined}
         nodeTypeRegistry={nodeTypeRegistry}
         nodeValidationErrors={nodeValidationErrors}
         jsonSchemaDrafts={jsonSchemaDrafts}

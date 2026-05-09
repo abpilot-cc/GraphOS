@@ -12,7 +12,7 @@
   },
   "scripts": {
     "start": "node build/server.js",
-    "dev": "tsx server.ts --cwd=../..",
+    "dev": "tsx server.ts --cwd=../.. --port 3000",
     "build:server": "tsc -p tsconfig.server.json",
     "build": "npm run build:server && vite build",
     "prepack": "npm run build",
@@ -23,7 +23,7 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^4.21.2",
-    "graphos-core": "^1.0.1",
+    "graphos-core": "^1.0.3",
     "socket.io": "^4.8.3",
     "vite": "^6.2.3",
     "zod": "^4.4.3"

@@ -4,11 +4,12 @@ import type { PluginManager } from "../plugin-manager.ts";
 export function handleGetPlugins(pluginManager: PluginManager) {
   return (_req: Request, res: Response) => {
     res.json(
-      pluginManager.listPlugins().map(({ name, status, error, nodeTypes }) => ({
+      pluginManager.listPlugins().map(({ name, status, error, nodeTypes, tabs }) => ({
         name,
         status,
         error,
         nodeTypeCount: nodeTypes.length,
+        tabs,
       })),
     );
   };

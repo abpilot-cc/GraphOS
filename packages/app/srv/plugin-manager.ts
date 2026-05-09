@@ -1,26 +1,18 @@
 import { EventEmitter } from "events";
+import express from "express";
 import fs from "fs";
-import path, { parse } from "path";
+import path from "path";
 import { pathToFileURL } from "url";
-import type { IGraph, INodeType } from "graphos-core";
+import type { IGraph, INodeType, IApp, IAppEvents, AppEvent } from "graphos-core";
+import type { Express, NextFunction, Request, Response } from "express";
 
-type AppEvent = "changed";
-type IAppEventChanged = { type: "changed"; data: IGraph };
 
-// ---------------------------------------------------------------------------
-// Plugin App context — matches IApp + addNode alias used by app.js plugins
-// ---------------------------------------------------------------------------
+type PluginInstaller = (app: IApp, env: any) => void | Promise<void>;
 
-type PluginApp = {
-  addNodeType(nodeType: unknown): PluginApp;
-  on(event: AppEvent, listener: (event: IAppEventChanged) => void): PluginApp;
-};
-
-type PluginInstaller = (app: PluginApp, env: any) => void | Promise<void>;
-
-function makePluginApp(): { app: PluginApp; nodeTypes: INodeType[] } {
+function makePluginApp(expressApp: Express): { app: IApp; nodeTypes: INodeType[], tabs: PluginTabDefinition[] } {
   const nodeTypes: INodeType[] = [];
-  const listeners = new Map<AppEvent, Array<(event: IAppEventChanged) => void>>();
+  const listeners = new Map<keyof IAppEvents, Array<(event: IAppEvents[keyof IAppEvents]) => void>>();
+  const tabs: PluginTabDefinition[] = [];
 
   const register = (raw: unknown): void => {
     if (!raw || typeof raw !== "object") {
@@ -36,22 +28,30 @@ function makePluginApp(): { app: PluginApp; nodeTypes: INodeType[] } {
     nodeTypes.push(raw as INodeType);
   };
 
-  const app: PluginApp = {
-    addNodeType(nodeType: unknown): PluginApp {
+  const app: IApp = {
+    addNodeType(nodeType: INodeType): IApp {
       register(nodeType);
       return app;
     },
-    on(event: AppEvent, listener: (event: IAppEventChanged) => void): PluginApp {
+    addTab(tab: PluginTabDefinition): IApp {
+      tabs.push(tab);
+      return app;
+    },
+    on<K extends keyof IAppEvents>(event: K, listener: (event: IAppEvents[K]) => void): IApp {
       const list = listeners.get(event) ?? [];
       list.push(listener);
       listeners.set(event, list);
       return app;
+    },
+    express(): Express {
+      return expressApp;
     },
   };
 
   return {
     app,
     nodeTypes,
+    tabs,
   };
 }
 
@@ -67,6 +67,13 @@ export interface PluginInfo {
   status: PluginStatus;
   error?: string;
   nodeTypes: INodeType[];
+  tabs: PluginTabDefinition[];
+}
+
+export interface PluginTabDefinition {
+  id: string;
+  label: string;
+  url: string;
 }
 
 export interface PluginManagerEvents {
@@ -82,16 +89,58 @@ export interface PluginManagerEvents {
 
 export class PluginManager extends EventEmitter {
   private readonly plugins = new Map<string, PluginInfo>();
-  private readonly pluginAppListeners = new Map<string, Map<AppEvent, Array<(event: IAppEventChanged) => void>>>();
+  private readonly pluginAppListeners = new Map<string, Map<keyof IAppEvents, Array<(event: IAppEvents[keyof IAppEvents]) => void>>>();
+  private readonly pluginHttpApps = new Map<string, Express>();
   private readonly graphosDir: string;
   private readonly workDir: string;
+  private readonly expressApp: Express;
+  private expressBridgeAttached = false;
   private watcher: fs.FSWatcher | null = null;
   private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(workDir: string) {
+  constructor(workDir: string, expressApp: Express) {
     super();
     this.workDir = workDir;
+    this.expressApp = expressApp;
     this.graphosDir = path.join(workDir, ".graphos");
+  }
+
+  attachExpressBridge(): void {
+    if (this.expressBridgeAttached) return;
+
+    this.expressApp.use((req: Request, res: Response, next: NextFunction) => {
+      this.dispatchPluginHttp(req, res, next);
+    });
+
+    this.expressBridgeAttached = true;
+  }
+
+  private dispatchPluginHttp(req: Request, res: Response, next: NextFunction): void {
+    const handlers = Array.from(this.pluginHttpApps.values());
+    if (handlers.length === 0) {
+      next();
+      return;
+    }
+
+    let index = 0;
+    const run = (err?: unknown) => {
+      if (err) {
+        next(err);
+        return;
+      }
+
+      const handler = handlers[index];
+      index += 1;
+
+      if (!handler) {
+        next();
+        return;
+      }
+
+      handler(req, res, run);
+    };
+
+    run();
   }
 
   private getGraphosPackageJsonPath(): string {
@@ -109,11 +158,14 @@ export class PluginManager extends EventEmitter {
       const raw = fs.readFileSync(packageJsonPath, "utf-8");
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       const deps = parsed.dependencies;
+      const graphosConfig = parsed.graphos && typeof parsed.graphos === "object"
+        ? parsed.graphos as Record<string, unknown>
+        : undefined;
       if (!deps || typeof deps !== "object") {
-        return [[], parsed.graphos ? { ...parsed.graphos, workDir: this.workDir } : { workDir: this.workDir }];
+        return [[], graphosConfig ? { ...graphosConfig, workDir: this.workDir } : { workDir: this.workDir }];
       }
 
-      return [Object.keys(deps as Record<string, unknown>), parsed.graphos ? { ...parsed.graphos, workDir: this.workDir } : { workDir: this.workDir }];
+      return [Object.keys(deps as Record<string, unknown>), graphosConfig ? { ...graphosConfig, workDir: this.workDir } : { workDir: this.workDir }];
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[PluginManager] Failed reading GraphOS dependencies: ${message}`);
@@ -121,7 +173,7 @@ export class PluginManager extends EventEmitter {
     }
   }
 
-  private resolvePluginEntryPath(name: string): string {
+  private resolvePluginConfig(name: string): { entryPath: string; tabs: PluginTabDefinition[] } {
     const packageJsonPath = path.join(this.graphosDir, "node_modules", name, "package.json");
     if (!fs.existsSync(packageJsonPath)) {
       throw new Error(`Cannot resolve package '${name}' from ${this.graphosDir}/node_modules`);
@@ -144,7 +196,38 @@ export class PluginManager extends EventEmitter {
       throw new Error(`Package '${name}' has invalid graphos.plugin.entry`);
     }
 
-    return path.resolve(path.dirname(packageJsonPath), entry);
+    const rawTabs = (plugin as Record<string, unknown>).tabs;
+    const tabs = this.normalizePluginTabs(rawTabs, name);
+
+    return {
+      entryPath: path.resolve(path.dirname(packageJsonPath), entry),
+      tabs,
+    };
+  }
+
+  private normalizePluginTabs(rawTabs: unknown, pluginName: string): PluginTabDefinition[] {
+    if (!Array.isArray(rawTabs)) return [];
+
+    const normalized: PluginTabDefinition[] = [];
+    for (const item of rawTabs) {
+      if (!item || typeof item !== "object") continue;
+      const tab = item as Record<string, unknown>;
+      const rawId = tab.id;
+      const rawLabel = tab.label;
+      const rawUrl = tab.url;
+
+      if (typeof rawId !== "string" || !rawId.trim()) continue;
+      if (typeof rawLabel !== "string" || !rawLabel.trim()) continue;
+      if (typeof rawUrl !== "string" || !rawUrl.trim()) continue;
+
+      normalized.push({
+        id: `${pluginName}:${rawId.trim()}`,
+        label: rawLabel.trim(),
+        url: rawUrl.trim(),
+      });
+    }
+
+    return normalized;
   }
 
   // ---- Loading -----------------------------------------------------------
@@ -172,19 +255,24 @@ export class PluginManager extends EventEmitter {
 
   async loadPlugin(name: string, env: any): Promise<void> {
     let entryPath = "";
-    const { app: pluginApp, nodeTypes } = makePluginApp();
-    const appListeners = new Map<AppEvent, Array<(event: IAppEventChanged) => void>>();
+    const pluginHttpApp = express();
+    const { app: pluginApp, nodeTypes, tabs } = makePluginApp(pluginHttpApp);
+    const appListeners = new Map<AppEvent, Array<(event: IAppEvents[keyof IAppEvents]) => void>>();
 
     // Runtime compatibility: always provide plugins an app object
     // with on/addNode/addNodeType, even if older code paths construct
     // a partial context.
-    const compatApp: PluginApp = {
-      addNodeType(nodeType: unknown): PluginApp {
+    const compatApp: IApp = {
+      addNodeType(nodeType: INodeType): IApp {
         pluginApp.addNodeType(nodeType);
         return compatApp;
       },
-      on(event: AppEvent, listener: (event: IAppEventChanged) => void): PluginApp {
-        const maybeOn = (pluginApp as Partial<PluginApp>).on;
+      addTab(tab: PluginTabDefinition): IApp {
+        pluginApp.addTab(tab);
+        return compatApp;
+      },
+      on<K extends keyof IAppEvents>(event: K, listener: (event: IAppEvents[K]) => void): IApp {
+        const maybeOn = (pluginApp as Partial<IApp>).on;
         if (typeof maybeOn === "function") {
           maybeOn(event, listener);
         }
@@ -193,10 +281,15 @@ export class PluginManager extends EventEmitter {
         appListeners.set(event, list);
         return compatApp;
       },
+      express(): Express {
+        return pluginApp.express();
+      },
     };
 
     try {
-      entryPath = this.resolvePluginEntryPath(name);
+      const config = this.resolvePluginConfig(name);
+      entryPath = config.entryPath;
+      tabs.push(...config.tabs);
       if (!fs.existsSync(entryPath)) {
         throw new Error(`Plugin entry does not exist: ${entryPath}`);
       }
@@ -212,9 +305,10 @@ export class PluginManager extends EventEmitter {
 
       await installer(compatApp, env);
 
-      const info: PluginInfo = { name, entryPath, status: "loaded", nodeTypes };
+      const info: PluginInfo = { name, entryPath, status: "loaded", nodeTypes, tabs };
       this.plugins.set(name, info);
       this.pluginAppListeners.set(name, appListeners);
+      this.pluginHttpApps.set(name, pluginHttpApp);
 
       console.log(`[PluginManager] Loaded plugin '${name}' — ${nodeTypes.length} node type(s)`);
       this.emit("plugin:loaded", name, nodeTypes);
@@ -229,8 +323,10 @@ export class PluginManager extends EventEmitter {
         status: "error",
         error: error.message,
         nodeTypes: [],
+        tabs: [],
       });
       this.pluginAppListeners.delete(name);
+      this.pluginHttpApps.delete(name);
 
       this.emit("plugin:error", name, error);
     }
@@ -241,12 +337,13 @@ export class PluginManager extends EventEmitter {
 
     this.plugins.delete(name);
     this.pluginAppListeners.delete(name);
+    this.pluginHttpApps.delete(name);
     console.log(`[PluginManager] Unloaded plugin '${name}'`);
     this.emit("plugin:unloaded", name);
     this.emit("node-types:changed", this.getNodeTypes());
   }
 
-  emitAppEvent(event: AppEvent, payload: IAppEventChanged): void {
+  emitAppEvent(event: AppEvent, payload: IAppEvents[keyof IAppEvents]): void {
     for (const [pluginName, listenersByEvent] of this.pluginAppListeners.entries()) {
       const listeners = listenersByEvent.get(event) ?? [];
       for (const listener of listeners) {
@@ -264,6 +361,8 @@ export class PluginManager extends EventEmitter {
   async reloadPlugin(name: string, env: any): Promise<void> {
     // Remove stale entry so loadPlugin starts fresh
     this.plugins.delete(name);
+    this.pluginAppListeners.delete(name);
+    this.pluginHttpApps.delete(name);
     await this.loadPlugin(name, env);
   }
 
@@ -340,7 +439,7 @@ export class PluginManager extends EventEmitter {
         pluginName = `${pluginName}/${scopedName}`;
       }
 
-      const dependencies = this.readGraphosDependencies();
+      const [dependencies] = this.readGraphosDependencies();
       if (!dependencies.includes(pluginName)) return;
 
       if (!pluginName) return;

@@ -98,7 +98,7 @@ async function startServer(options: ServerOptions) {
   app.use(express.json());
 
   // --- Plugin Manager ---
-  const pluginManager = new PluginManager(options.workingDir);
+  const pluginManager = new PluginManager(options.workingDir, app);
   const env = await pluginManager.loadAll();
   pluginManager.watchPlugins(env);
 
@@ -110,6 +110,7 @@ async function startServer(options: ServerOptions) {
   // --- Routes & WebSocket ---
   registerRoutes(app, io, pluginManager);
   registerSocketHandlers(io, pluginManager);
+  pluginManager.attachExpressBridge();
 
   // --- Vite Integration ---
   const appRoot = path.dirname(fileURLToPath(import.meta.url));

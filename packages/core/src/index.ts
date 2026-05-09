@@ -1,5 +1,6 @@
 import { Ajv } from 'ajv';
 import type { AnySchema } from 'ajv';
+import type { Express } from "express";
 
 export interface INode {
     readonly id: string;
@@ -48,9 +49,18 @@ export interface IAppEvents {
 
 export type AppEvent = keyof IAppEvents;
 
+export interface PluginTabDefinition {
+    id: string;
+    label: string;
+    url: string;
+}
+
+
 export interface IApp {
     addNodeType(node: INodeType): IApp;
+    addTab(tab: PluginTabDefinition): IApp;
     on<K extends AppEvent>(event: K, on: (event: IAppEvents[K]) => void): IApp;
+    express(): Express;
 }
 
 
