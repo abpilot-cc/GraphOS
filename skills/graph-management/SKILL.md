@@ -167,6 +167,7 @@ Completion check:
 - Validate node property payloads against node type requirements before submit.
 - For destructive updates, inspect current graph first and include only intended operations.
 - Treat partial success as normal: check `errors` and retry only failed intent.
+- Never edit `*.graph.json` files directly; all graph reads and mutations must go through the GraphOS APIs documented in this skill.
 
 ## Request Examples
 
