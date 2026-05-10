@@ -2,6 +2,7 @@ import type { IApp, IGraph, INode } from "graphos-core";
 import { genTypeScript } from "./genTypeScript.js";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
 import { App, MemStorage, type AddEvent, type DelEvent, type GetEvent, type IEvent, type IEventSource, type IObject, type SetEvent } from "./index.js";
@@ -32,7 +33,7 @@ export default function install(app: IApp, env: any) {
             }
         },
         inTypes: [],
-        outTypes: ['Context', 'Variant', 'Event']
+        outTypes: ['Context', 'Variant', 'Event', 'System'],
     })
 
     app.addNodeType({
@@ -51,7 +52,7 @@ export default function install(app: IApp, env: any) {
             }
         },
         inTypes: ['World', 'Context'],
-        outTypes: ['Context', 'Variant', 'Event'],
+        outTypes: ['Context', 'Variant', 'Event', 'System'],
     })
 
     app.addNodeType({
@@ -235,6 +236,7 @@ export default function install(app: IApp, env: any) {
         let fps: number = 30;
         let isPaused: boolean = false;
         let records: AppRecord[] = [];
+        let loadedTmpDir: string | undefined;
 
         const emitState = () => {
             socket.emit("world-state", { duration: duration, current: current, state: app ? isPaused ? 'paused' : 'running' : 'stopped', scale: scale, fps: fps });
@@ -286,11 +288,32 @@ export default function install(app: IApp, env: any) {
         const onLoadApp = () => {
             app = new App(new MemStorage());
             onInit();
-            const entryPath = path.join(env.workDir, "dist/src/app.js");
+            const sourceDistPath = path.join(env.workDir, "dist");
+            if (loadedTmpDir) {
+                try {
+                    fs.rmSync(loadedTmpDir, { recursive: true, force: true });
+                } catch (e) {
+                    console.warn(`Failed to remove previous temp world dist at ${loadedTmpDir}:`, e);
+                }
+                loadedTmpDir = undefined;
+            }
+
+            const runTmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "graphos-world-"));
+            const tmpDistPath = path.join(runTmpRoot, "dist");
+
+            try {
+                fs.cpSync(sourceDistPath, tmpDistPath, { recursive: true });
+                loadedTmpDir = runTmpRoot;
+            } catch (e) {
+                console.error(`Failed to copy world dist from ${sourceDistPath} to temp path ${tmpDistPath}:`, e);
+                return;
+            }
+
+            const entryPath = path.join(tmpDistPath, "src/app.js");
             if (fs.existsSync(entryPath)) {
                 (async () => {
                     try {
-                        const url = `${pathToFileURL(entryPath).href}?t=${Date.now()}`;
+                        const url = pathToFileURL(entryPath).href;
                         const e = await import(url);
                         const fn: (app: App) => IEventSource<IObject> = e.default;
                         worldContext = fn(app);
@@ -351,6 +374,7 @@ export default function install(app: IApp, env: any) {
             records.splice(0, records.length);
             if (tv) clearTimeout(tv);
             tv = undefined;
+            socket.emit('world-event-record-clear');
             emitState();
         });
 
@@ -405,6 +429,14 @@ export default function install(app: IApp, env: any) {
             if (tv) clearTimeout(tv);
             tv = undefined;
             app = undefined;
+            if (loadedTmpDir) {
+                try {
+                    fs.rmSync(loadedTmpDir, { recursive: true, force: true });
+                } catch (e) {
+                    console.warn(`Failed to remove temp world dist at ${loadedTmpDir}:`, e);
+                }
+                loadedTmpDir = undefined;
+            }
         });
     });
 }

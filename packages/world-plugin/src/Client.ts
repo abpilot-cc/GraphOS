@@ -127,29 +127,57 @@ export function ClientProvider({ children }: { children: ReactNode }) {
             });
             if (data.type !== 'event') {
                 let object = data.data as IObject;
-                let vs = objectSet.get(object.table);
-                if (!vs) {
-                    objectSet.set(object.table, [[object], new Map([[object.id, object]])]);
-                } else {
-                    let v = vs[1].get(object.id);
-                    if (v) {
-                        let i = vs[0].indexOf(v);
-                        if (i !== -1) {
-                            vs[0][i] = object;
+                if (data.type === 'add') {
+                    let vs = objectSet.get(object.table);
+                    if (!vs) {
+                        object = { ...object };
+                        objectSet.set(object.table, [[object], new Map([[object.id, object]])]);
+                    } else {
+                        let v = vs[1].get(object.id);
+                        if (v) {
+                            let i = vs[0].indexOf(v);
+                            if (i !== -1) {
+                                vs[0][i] = object;
+                            } else {
+                                vs[0].push(object);
+                            }
+                            vs[1].set(object.id, object);
                         } else {
                             vs[0].push(object);
+                            vs[1].set(object.id, object);
                         }
-                        vs[1].set(object.id, object);
-                    } else {
-                        vs[0].push(object);
-                        vs[1].set(object.id, object);
+                    }
+                } else if (data.type === 'set') {
+                    let vs = objectSet.get(object.table);
+                    if (vs) {
+                        let v = vs[1].get(object.id);
+                        if (v) {
+                            Object.assign(v, object);
+                            object = v;
+                        }
+                    }
+                } else if (data.type === 'del') {
+                    let vs = objectSet.get(object.table);
+                    if (vs) {
+                        let v = vs[1].get(object.id);
+                        if (v) {
+                            let i = vs[0].indexOf(v);
+                            if (i !== -1) {
+                                vs[0].splice(i, 1);
+                            }
+                            vs[1].delete(object.id);
+                        }
                     }
                 }
+
                 setTables((prevTables) => {
                     return [...prevTables];
                 });
                 setFocusObject((prevFocus) => {
                     if (prevFocus && prevFocus[0].id === object.id && prevFocus[0].table === object.table) {
+                        if (data.type === 'del') {
+                            return null;
+                        }
                         return [object, prevFocus[1]];
                     }
                     return prevFocus;
