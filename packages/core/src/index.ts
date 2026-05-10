@@ -1,7 +1,7 @@
 import { Ajv } from 'ajv';
 import type { AnySchema } from 'ajv';
 import type { Express } from "express";
-import type SocketIO from "socket.io";
+import type { EventEmitter } from 'stream';
 
 export interface INode {
     readonly id: string;
@@ -51,7 +51,7 @@ export interface IAppEventChanged {
 
 export interface IAppEventSocket {
     type: 'socket';
-    socket: SocketIO.Socket;
+    socket: EventEmitter;
 }
 
 export interface IAppEvents {

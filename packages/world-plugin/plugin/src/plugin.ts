@@ -6,7 +6,7 @@ import os from "os";
 import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
 import { App, MemStorage, type AddEvent, type DelEvent, type GetEvent, type IEvent, type IEventSource, type IObject, type SetEvent } from "./index.js";
-import { Socket } from "socket.io";
+import type { EventEmitter } from "stream";
 
 type AppRecord = {
     time: number;
@@ -188,7 +188,7 @@ export default function install(app: IApp, env: any) {
     })
 
     let graph: IGraph | undefined;
-    let socketSet = new Set<Socket>();
+    let socketSet = new Set<EventEmitter>();
 
     const setGraph = (g: IGraph) => {
         graph = g;
@@ -231,7 +231,6 @@ export default function install(app: IApp, env: any) {
 
     app.addTab({ id: 'world', label: 'Simulator', url: '/world/' });
     app.on('socket', ({ socket }) => {
-        console.log("Received socket connection in World plugin:", socket.id);
         // You can set up socket event handlers here if needed
         let tv: any;
         let app: App | undefined;
