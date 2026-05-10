@@ -8,7 +8,6 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { App, MemStorage, type AddEvent, type DelEvent, type GetEvent, type IEvent, type IEventSource, type IObject, type SetEvent } from "./index.js";
 import { Socket } from "socket.io";
 
-
 type AppRecord = {
     time: number;
     type: 'event' | 'get' | 'add' | 'set' | 'del';
@@ -223,7 +222,14 @@ export default function install(app: IApp, env: any) {
         res.sendFile(path.join(distPath, "index.html"));
     });
 
-    app.addTab({ id: 'world', label: 'Simulator', url: '/world' });
+
+    const appPath = path.join(env.workDir, "dist/app");
+    app.express().use("/app", express.static(appPath));
+    app.express().get("/app/*", (req, res) => {
+        res.sendFile(path.join(appPath, "index.html"));
+    });
+
+    app.addTab({ id: 'world', label: 'Simulator', url: '/world/' });
     app.on('socket', ({ socket }) => {
         console.log("Received socket connection in World plugin:", socket.id);
         // You can set up socket event handlers here if needed

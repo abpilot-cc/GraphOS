@@ -2,6 +2,9 @@ import { IGraph, INode } from 'graphos-core';
 import React, { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
+
+(window as any).GRAPHOS_WORLD_PLUGIN_CLIENT_VERSION = '1.0.6';
+
 export type ClientContextValue = {
     socket: Socket | null;
     isConnected: boolean;
@@ -120,8 +123,12 @@ export function ClientProvider({ children }: { children: ReactNode }) {
             window.dispatchEvent(new CustomEvent('world-event-record', { detail: data }));
             data.id = ++autoId;
             setRecords((prevRecords) => {
-                if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table) {
+                if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
                     return [data, ...prevRecords.slice(0, 19)];
+                }
+                if (data.type === 'set') {
+                    Object.assign(prevRecords[0].data, data.data);
+                    return [...prevRecords];
                 }
                 return [data, ...prevRecords.slice(1, 19)];
             });
@@ -195,7 +202,16 @@ export function ClientProvider({ children }: { children: ReactNode }) {
             });
         });
 
+        const onSendEvent = (e: Event) => {
+            if (e instanceof CustomEvent) {
+                newSocket.emit('world-send-event', e.detail);
+            }
+        };
+
+        window.addEventListener('world-send-event', onSendEvent);
+
         return () => {
+            window.removeEventListener('world-send-event', onSendEvent);
             newSocket.close();
         };
     }, [objectSet]);

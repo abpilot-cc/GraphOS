@@ -93,7 +93,7 @@ export function IPadSimulator() {
     return savedOrientation && isValidOrientation(savedOrientation) ? savedOrientation : 'portrait';
   });
   const [showSafeArea, setShowSafeArea] = useState(false);
-  const [url] = useState('about:blank');
+  const [url] = useState('/app/');
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
