@@ -6,66 +6,51 @@ import { useClient } from '@/src/Client';
 export function ControlWidget() {
   const lastUpdateRef = useRef<number>(0);
   const client = useClient();
-
-  // useEffect(() => {
-  //   let requestRef: number;
-
-  //   const animate = (time: number) => {
-  //     if (isPlaying) {
-  //       if (lastUpdateRef.current !== 0) {
-  //         const deltaTime = ((time - lastUpdateRef.current) / 1000) * timeScale;
-  //         setGameTime(prev => {
-  //           const nextTime = prev + deltaTime;
-  //           setMaxGameTime(curr => Math.max(curr, nextTime));
-  //           return nextTime;
-  //         });
-  //       }
-  //       lastUpdateRef.current = time;
-  //     } else {
-  //       lastUpdateRef.current = 0;
-  //     }
-  //     requestRef = requestAnimationFrame(animate);
-  //   };
-
-  //   requestRef = requestAnimationFrame(animate);
-  //   return () => cancelAnimationFrame(requestRef);
-  // }, [isPlaying]);
+  const [pendingCurrent, setPendingCurrent] = useState<number | null>(null);
 
   const handleReset = () => {
     lastUpdateRef.current = 0;
-    if (client.socket) {
-      client.socket.emit('world-reset');
-    }
+    client.emit('world-reset');
   };
 
   const setTimeScale = (scale: number) => {
-    if (client.socket) {
-      client.socket.emit('world-set-timescale', scale);
-    }
+    client.emit('world-set-timescale', scale);
   };
 
   const setFps = (fps: number) => {
-    if (client.socket) {
-      client.socket.emit('world-set-fps', fps);
-    }
+    client.emit('world-set-fps', fps);
   };
 
   const setPlaying = () => {
-    if (client.socket) {
-      if (client.state.state === 'stopped') {
-        client.socket.emit('world-start');
-      } else if (client.state.state === 'running') {
-        client.socket.emit('world-pause');
-      } else {
-        client.socket.emit('world-resume');
-      }
+    if (client.state.state === 'stopped') {
+      client.emit('world-start');
+    } else if (client.state.state === 'running') {
+      client.emit('world-pause');
+    } else {
+      client.emit('world-resume');
     }
   };
 
   const setCurrent = (time: number) => {
-    if (client.socket) {
-      client.socket.emit('world-set-current', time);
+    client.emit('world-set-current', time);
+  };
+
+  useEffect(() => {
+    if (client.state.state === 'running') {
+      setPendingCurrent(null);
     }
+  }, [client.state.state]);
+
+  const handleTimelineChange = (value: number) => {
+    setPendingCurrent(value);
+  };
+
+  const commitTimelineChange = () => {
+    if (pendingCurrent === null) {
+      return;
+    }
+    setCurrent(pendingCurrent);
+    setPendingCurrent(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -164,9 +149,12 @@ export function ControlWidget() {
               min="0"
               max={client.state.state === 'running' ? 100 : (client.state.duration || 0.01)}
               step="0.01"
-              value={client.state.state === 'running' ? 100 : client.state.current}
+              value={client.state.state === 'running' ? 100 : (pendingCurrent ?? client.state.current)}
               disabled={client.state.state === 'running'}
-              onChange={(e) => setCurrent(parseFloat(e.target.value))}
+              onChange={(e) => handleTimelineChange(parseFloat(e.target.value))}
+              onMouseUp={commitTimelineChange}
+              onTouchEnd={commitTimelineChange}
+              onBlur={commitTimelineChange}
               className={`w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none transition-all ${client.state.state === 'running'
                 ? 'cursor-not-allowed opacity-50'
                 : 'cursor-pointer accent-blue-500 hover:accent-blue-600'
@@ -187,7 +175,7 @@ export function ControlWidget() {
           </span>
           <div className="bg-zinc-100 dark:bg-black rounded-lg px-3 py-0.5 border border-zinc-200 dark:border-zinc-800 shadow-inner">
             <span className="text-base font-mono text-emerald-600 dark:text-emerald-500 tabular-nums font-bold tracking-tight glow-text-emerald">
-              {formatTime(client.state.current)}
+              {formatTime(pendingCurrent ?? client.state.current)}
             </span>
           </div>
         </div>

@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
-import type { Server } from "socket.io";
 import { validateNode } from "graphos-core";
 import type { INode } from "graphos-core";
 import type { PluginManager } from "../plugin-manager.ts";
+import type { RealtimeServer } from "../realtime.ts";
 import {
   getWorkingDir,
   TransactionSchema,
@@ -15,7 +15,7 @@ import {
 } from "../core.ts";
 import { listGraphHistory } from "../history.ts";
 
-export function handlePostGraphApply(io: Server, pluginManager: PluginManager) {
+export function handlePostGraphApply(realtime: RealtimeServer, pluginManager: PluginManager) {
   return (req: Request, res: Response) => {
     const graphId = resolveGraphId(req.body?.graphId);
     const graph = loadGraph(graphId);
@@ -174,8 +174,8 @@ export function handlePostGraphApply(io: Server, pluginManager: PluginManager) {
         source: "api.apply",
         summary: applied.join(", "),
       });
-      io.to(graphId).emit("graph-update", toRFGraph(graph));
-      io.to(graphId).emit("graph-history-updated", {
+      realtime.broadcastGraph(graphId, "graph-update", toRFGraph(graph));
+      realtime.broadcastGraph(graphId, "graph-history-updated", {
         graphId,
         history: listGraphHistory(getWorkingDir(), graphId),
       });

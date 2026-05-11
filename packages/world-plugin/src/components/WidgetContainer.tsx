@@ -3,6 +3,7 @@ import { Widget } from '../types';
 import { JsonLiveWidget, ControlWidget, RealTimeTable, LogsWidget, IPadSimulator, SendEventWidget } from './Widgets';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { DeviceListWidget } from './widgets/DeviceListWidget';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -29,6 +30,8 @@ export const WidgetContainer = forwardRef<HTMLDivElement, WidgetContainerProps>(
           return <IPadSimulator />;
         case 'send-event':
           return <SendEventWidget />;
+        case 'device-list':
+          return <DeviceListWidget />;
         default:
           return <div className="p-4">Widget {widget.id} ({widget.type})</div>;
       }
@@ -49,10 +52,10 @@ export const WidgetContainer = forwardRef<HTMLDivElement, WidgetContainerProps>(
         {...props}
       >
         <div className="h-2 w-full bg-transparent group-hover:bg-zinc-100 dark:group-hover:bg-zinc-900/50 transition-colors cursor-move flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 rounded-t-xl">
-           <div className="w-6 h-0.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+          <div className="w-6 h-0.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
         </div>
         <div className="flex-1 overflow-hidden rounded-b-xl relative">
-           {renderWidget()}
+          {renderWidget()}
         </div>
         {/* Resize handles will be rendered here as children by RGL */}
         {children}

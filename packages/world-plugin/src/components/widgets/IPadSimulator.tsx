@@ -164,11 +164,16 @@ export function IPadSimulator() {
 
   // Calculate scale to fit in container
   const padding = 64;
-  const scale = containerSize.width > 0 ? Math.min(
-    (containerSize.width - padding) / physWidth,
-    (containerSize.height - padding) / physHeight,
-    1
-  ) : 0.1;
+  const availableWidth = Math.max(containerSize.width - padding, 1);
+  const availableHeight = Math.max(containerSize.height - padding, 1);
+  const fitScale = Math.min(
+    availableWidth / physWidth,
+    availableHeight / physHeight,
+  );
+  const maxScale = isLandscape ? 1.6 : 1;
+  const scale = containerSize.width > 0 && containerSize.height > 0
+    ? Math.max(0.1, Math.min(fitScale, maxScale))
+    : 0.1;
 
   const cycleOrientation = () => {
     const currentIndex = ORIENTATIONS.indexOf(orientation);

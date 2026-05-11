@@ -178,13 +178,11 @@ export function SendEventWidget() {
 
         try {
             const data = JSON.parse(inputEventData || eventData || '{}');
-            if (client.socket) {
-                client.socket.emit('world-send-event', data);
-            }
+            client.emit('world-send-event', data);
         } catch (e) {
             console.error('Error parsing JSON or sending event:', e);
         }
-    }, [isValidJson, inputEventData, eventData, client.socket]);
+    }, [isValidJson, inputEventData, eventData, client]);
 
     return (
         <div className="h-full flex flex-col px-4 py-2 bg-transparent rounded-b-xl gap-3">

@@ -2,7 +2,7 @@ import { Layout } from 'react-grid-layout';
 
 export interface Widget {
   id: string;
-  type: 'table' | 'json' | 'control' | 'logs' | 'ipad' | 'send-event';
+  type: 'table' | 'json' | 'control' | 'logs' | 'ipad' | 'send-event' | 'device-list';
   title: string;
 }
 

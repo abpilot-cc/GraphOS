@@ -6,13 +6,131 @@ import os from "os";
 import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
 import { App, MemStorage, type AddEvent, type DelEvent, type GetEvent, type IEvent, type IEventSource, type IObject, type SetEvent } from "./index.js";
-import type { EventEmitter } from "stream";
 
 type AppRecord = {
     time: number;
     type: 'event' | 'get' | 'add' | 'set' | 'del';
     data: IEvent<IObject> | IObject;
 };
+
+type WsEnvelope = {
+    type: string;
+    payload?: unknown;
+};
+
+type PluginSocket = {
+    on: (event: string, listener: (...args: any[]) => void) => void;
+    off?: (event: string, listener: (...args: any[]) => void) => void;
+    removeListener?: (event: string, listener: (...args: any[]) => void) => void;
+    send?: (data: string) => void;
+    emit?: (event: string, payload?: unknown) => void;
+    readyState?: number;
+    OPEN?: number;
+    device?: { type: string };
+    __wsEventHandlers?: Map<string, Set<(payload: unknown) => void>>;
+    __wsMessageListener?: (raw: unknown) => void;
+};
+
+function isWsSocket(socket: PluginSocket): boolean {
+    return typeof socket.send === "function";
+}
+
+function parseWsEnvelope(raw: unknown): WsEnvelope | null {
+    try {
+        const asText = (() => {
+            if (typeof raw === "string") return raw;
+            if (Array.isArray(raw)) return Buffer.concat(raw).toString();
+            if (raw instanceof ArrayBuffer) return Buffer.from(new Uint8Array(raw)).toString();
+            if (raw instanceof Uint8Array) return Buffer.from(raw).toString();
+            return String(raw ?? "");
+        })();
+        const parsed = JSON.parse(asText) as WsEnvelope;
+        if (!parsed || typeof parsed.type !== "string") return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function emitSocketEvent(socket: PluginSocket, type: string, payload?: unknown) {
+    if (isWsSocket(socket)) {
+        const openState = typeof socket.OPEN === "number" ? socket.OPEN : 1;
+        if (typeof socket.readyState === "number" && socket.readyState !== openState) return;
+        socket.send!(JSON.stringify({ type, payload }));
+        return;
+    }
+
+    socket.emit?.(type, payload);
+}
+
+function attachSocketEvent(
+    socket: PluginSocket,
+    type: string,
+    handler: (payload: unknown) => void,
+    cleanups: Array<() => void>,
+) {
+    if (isWsSocket(socket)) {
+        if (!socket.__wsEventHandlers) {
+            socket.__wsEventHandlers = new Map();
+        }
+
+        if (!socket.__wsMessageListener) {
+            socket.__wsMessageListener = (raw: unknown) => {
+                const envelope = parseWsEnvelope(raw);
+                if (!envelope) return;
+
+                const handlers = socket.__wsEventHandlers?.get(envelope.type);
+                if (!handlers || handlers.size === 0) return;
+
+                for (const fn of handlers) {
+                    fn(envelope.payload);
+                }
+            };
+            socket.on("message", socket.__wsMessageListener);
+        }
+
+        const handlers = socket.__wsEventHandlers.get(type) ?? new Set<(payload: unknown) => void>();
+        handlers.add(handler);
+        socket.__wsEventHandlers.set(type, handlers);
+
+        cleanups.push(() => {
+            const byType = socket.__wsEventHandlers?.get(type);
+            if (byType) {
+                byType.delete(handler);
+                if (byType.size === 0) {
+                    socket.__wsEventHandlers?.delete(type);
+                }
+            }
+
+            if (socket.__wsEventHandlers && socket.__wsEventHandlers.size === 0 && socket.__wsMessageListener) {
+                if (socket.off) socket.off("message", socket.__wsMessageListener);
+                else socket.removeListener?.("message", socket.__wsMessageListener);
+                delete socket.__wsMessageListener;
+            }
+        });
+        return;
+    }
+
+    const listener = (payload: unknown) => handler(payload);
+    socket.on(type, listener);
+    cleanups.push(() => {
+        if (socket.off) socket.off(type, listener);
+        else socket.removeListener?.(type, listener);
+    });
+}
+
+function attachSocketDisconnect(
+    socket: PluginSocket,
+    handler: () => void,
+    cleanups: Array<() => void>,
+) {
+    const eventName = isWsSocket(socket) ? "close" : "disconnect";
+    socket.on(eventName, handler);
+    cleanups.push(() => {
+        if (socket.off) socket.off(eventName, handler);
+        else socket.removeListener?.(eventName, handler);
+    });
+}
 
 export default function install(app: IApp, env: any) {
 
@@ -188,12 +306,36 @@ export default function install(app: IApp, env: any) {
     })
 
     let graph: IGraph | undefined;
-    let socketSet = new Set<EventEmitter>();
+    let socketSet = new Set<PluginSocket>();
 
     const setGraph = (g: IGraph) => {
         graph = g;
         for (const socket of socketSet) {
-            socket.emit('world-graph', graph);
+            emitSocketEvent(socket, 'world-graph', graph);
+        }
+    };
+
+    const getDevices = () => {
+        let devices: { type: string }[] = [];
+        for (const socket of socketSet) {
+            if (socket.device) {
+                devices.push(socket.device);
+            }
+        }
+        return devices;
+    };
+
+    const emitDeviceList = () => {
+        let devices = getDevices();
+        for (const socket of socketSet) {
+            emitSocketEvent(socket, 'world-device-list', devices);
+        }
+    };
+
+    const emitDevicesEvent = (type: string, payload?: unknown) => {
+        for (const socket of socketSet) {
+            if (!socket.device) continue;
+            emitSocketEvent(socket, type, payload);
         }
     };
 
@@ -204,12 +346,13 @@ export default function install(app: IApp, env: any) {
     app.on("changed", (event) => {
         setGraph(event.data);
         if (env && env.world && env.world.genTypeScript) {
-            const file = path.join(env.workDir, "gen/World.ts");
+            const gen = path.join(env.workDir, "gen");
             try {
-                const code = genTypeScript(event.data);
-                fs.mkdirSync(path.dirname(file), { recursive: true });
-                fs.writeFileSync(file, code, "utf-8");
-                console.log(`Generated TypeScript code for World model at ${file}`);
+                const codeFiles = genTypeScript(event.data);
+                fs.mkdirSync(gen, { recursive: true });
+                for (let file of codeFiles) {
+                    fs.writeFileSync(path.join(gen, file.name), file.content, "utf-8");
+                }
             } catch (err: any) {
                 console.error("Error generating TypeScript code for World model:", err.stack || err);
             }
@@ -231,6 +374,12 @@ export default function install(app: IApp, env: any) {
 
     app.addTab({ id: 'world', label: 'Simulator', url: '/world/' });
     app.on('socket', ({ socket }) => {
+        const socketLike = socket as unknown as PluginSocket;
+        const cleanups: Array<() => void> = [];
+        const emit = (type: string, payload?: unknown) => emitSocketEvent(socketLike, type, payload);
+        const onEvent = <T = unknown>(type: string, handler: (payload: T) => void) => {
+            attachSocketEvent(socketLike, type, (payload) => handler(payload as T), cleanups);
+        };
         // You can set up socket event handlers here if needed
         let tv: any;
         let app: App | undefined;
@@ -244,7 +393,7 @@ export default function install(app: IApp, env: any) {
         let loadedTmpDir: string | undefined;
 
         const emitState = () => {
-            socket.emit("world-state", { duration: duration, current: current, state: app ? isPaused ? 'paused' : 'running' : 'stopped', scale: scale, fps: fps });
+            emit("world-state", { duration: duration, current: current, state: app ? isPaused ? 'paused' : 'running' : 'stopped', scale: scale, fps: fps });
         };
 
         let onUpdate: () => void;
@@ -268,25 +417,29 @@ export default function install(app: IApp, env: any) {
             app.ctx.on<GetEvent<IObject>, IObject>('get', (event) => {
                 let item: AppRecord = { time: duration, type: 'get', data: JSON.parse(JSON.stringify(event.source.object)) };
                 records.push(item);
-                socket.emit('world-event-record', item);
+                emit('world-event-record', item);
+                emitDevicesEvent('world-event-record', item);
             });
 
             app.ctx.on<SetEvent<IObject>, IObject>('set', (event) => {
                 let item: AppRecord = { time: duration, type: 'set', data: { ...JSON.parse(JSON.stringify(event.data)), id: event.source.object.id, table: event.source.object.table } };
                 records.push(item);
-                socket.emit('world-event-record', item);
+                emit('world-event-record', item);
+                emitDevicesEvent('world-event-record', item);
             });
 
             app.ctx.on<AddEvent<IObject>, IObject>('add', (event) => {
                 let item: AppRecord = { time: duration, type: 'add', data: JSON.parse(JSON.stringify(event.source.object)) };
                 records.push(item);
-                socket.emit('world-event-record', item);
+                emit('world-event-record', item);
+                emitDevicesEvent('world-event-record', item);
             });
 
             app.ctx.on<DelEvent<IObject>, IObject>('del', (event) => {
                 let item: AppRecord = { time: duration, type: 'del', data: { id: event.source.object.id, table: event.source.object.table } };
                 records.push(item);
-                socket.emit('world-event-record', item);
+                emit('world-event-record', item);
+                emitDevicesEvent('world-event-record', item);
             });
         };
 
@@ -330,38 +483,41 @@ export default function install(app: IApp, env: any) {
             }
         };
 
-        socket.on('world-get-state', emitState);
+        onEvent('world-get-state', () => emitState());
 
-        socket.on('world-get-graph', () => {
+        onEvent('world-get-graph', () => {
             if (graph) {
-                socket.emit('world-graph', graph);
+                emit('world-graph', graph);
             }
         })
 
-        socket.on('world-set-timescale', (newScale: number) => {
+        onEvent<number>('world-set-timescale', (newScale) => {
             scale = newScale;
             emitState();
         });
 
-        socket.on('world-set-fps', (newFps: number) => {
+        onEvent<number>('world-set-fps', (newFps) => {
             fps = newFps;
             emitState();
         });
 
-        socket.on('world-set-current', (newCurrent: number) => {
+        onEvent<number>('world-set-current', (newCurrent) => {
             if (!app || !isPaused || newCurrent < 0 || newCurrent > duration || current === newCurrent) return;
             if (newCurrent > current) {
                 for (let record of records) {
                     if (record.time > current && record.time <= newCurrent) {
-                        socket.emit('world-event-record', record);
+                        emit('world-event-record', record);
+                        emitDevicesEvent('world-event-record', record);
                     }
                 }
                 current = newCurrent;
             } else {
-                socket.emit('world-event-record-clear');
+                emit('world-event-record-clear');
+                emitDevicesEvent('world-event-record-clear');
                 for (let record of records) {
                     if (record.time <= newCurrent) {
-                        socket.emit('world-event-record', record);
+                        emit('world-event-record', record);
+                        emitDevicesEvent('world-event-record', record);
                     }
                 }
                 current = newCurrent;
@@ -369,7 +525,7 @@ export default function install(app: IApp, env: any) {
             emitState();
         });
 
-        socket.on('world-reset', () => {
+        onEvent('world-reset', () => {
             duration = 0;
             current = 0;
             scale = 1.0;
@@ -379,23 +535,25 @@ export default function install(app: IApp, env: any) {
             records.splice(0, records.length);
             if (tv) clearTimeout(tv);
             tv = undefined;
-            socket.emit('world-event-record-clear');
+            emit('world-event-record-clear');
+            emitDevicesEvent('world-event-record-clear');
             emitState();
         });
 
-        socket.on('world-pause', () => {
+        onEvent('world-pause', () => {
             isPaused = true;
             if (tv) clearTimeout(tv);
             tv = undefined;
             emitState();
         });
 
-        socket.on('world-resume', () => {
+        onEvent('world-resume', () => {
             isPaused = false;
             if (current < duration) {
                 for (let record of records) {
                     if (record.time > current) {
-                        socket.emit('world-event-record', record);
+                        emit('world-event-record', record);
+                        emitDevicesEvent('world-event-record', record);
                     }
                 }
                 current = duration;
@@ -407,7 +565,7 @@ export default function install(app: IApp, env: any) {
             emitState();
         });
 
-        socket.on('world-start', () => {
+        onEvent('world-start', () => {
             isPaused = false;
             if (!app) {
                 onLoadApp();
@@ -417,20 +575,34 @@ export default function install(app: IApp, env: any) {
             emitState();
         });
 
-        socket.on('world-send-event', (data) => {
+        onEvent('world-send-event', (data) => {
             console.log('Received event from client:', data);
-            if (typeof data === 'object' && data.type && worldContext && app) {
-                let item: AppRecord = { time: duration, type: 'event', data };
-                records.push(item);
-                app.trigger({ ...data, source: worldContext });
-                socket.emit('world-event-record', item);
-            }
+            if (!data || typeof data !== 'object' || !worldContext || !app) return;
+
+            const eventData = data as Record<string, unknown>;
+            if (typeof eventData.type !== 'string') return;
+
+            const triggerEvent = { ...eventData, source: worldContext } as IEvent<IObject>;
+            let item: AppRecord = { time: duration, type: 'event', data: eventData as unknown as IEvent<IObject> };
+            records.push(item);
+            app.trigger(triggerEvent);
+            emit('world-event-record', item);
+            emitDevicesEvent('world-event-record', item);
         });
 
-        socketSet.add(socket);
+        onEvent<{ type: string }>('world-device', (device) => {
+            socketLike.device = device;
+            emitDeviceList();
+        });
 
-        socket.on('disconnect', () => {
-            socketSet.delete(socket);
+        onEvent<{ type: string }>('world-get-devices', () => {
+            emitSocketEvent(socketLike, 'world-device-list', getDevices());
+        });
+
+        socketSet.add(socketLike);
+
+        attachSocketDisconnect(socketLike, () => {
+            socketSet.delete(socketLike);
             if (tv) clearTimeout(tv);
             tv = undefined;
             app = undefined;
@@ -442,6 +614,10 @@ export default function install(app: IApp, env: any) {
                 }
                 loadedTmpDir = undefined;
             }
-        });
+            for (const cleanup of cleanups) {
+                cleanup();
+            }
+            emitDeviceList();
+        }, cleanups);
     });
 }

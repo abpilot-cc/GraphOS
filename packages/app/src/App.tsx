@@ -14,7 +14,6 @@ import {
   useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { io, type Socket } from 'socket.io-client';
 import { useTranslation } from 'react-i18next';
 import { validateNode } from 'graphos-core';
 
@@ -45,12 +44,17 @@ import {
   makeJsonSchemaDraftKey,
 } from './utils/schemaEditor';
 
+type WsEnvelope<T = unknown> = {
+  type: string;
+  payload?: T;
+};
+
 function GraphOS() {
   const { t, i18n } = useTranslation();
   const { screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes] = useNodesState([]);
   const [edges, setEdges] = useEdgesState([]);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [currentGraphId, setCurrentGraphId] = useState(() => {
     return localStorage.getItem(LAST_GRAPH_ID_STORAGE_KEY) || 'main';
@@ -84,6 +88,12 @@ function GraphOS() {
   const [activeTabId, setActiveTabId] = useState('graph');
   const currentGraphIdRef = useRef(currentGraphId);
   const graphTab = useMemo(() => ({ id: 'graph', label: 'Graph', kind: 'graph' as const }), []);
+
+  const sendWs = useCallback((type: string, payload?: unknown) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const message: WsEnvelope = { type, payload };
+    socket.send(JSON.stringify(message));
+  }, [socket]);
 
   const tabs = useMemo(() => {
     const pluginTabItems = pluginTabs.map((tab) => ({
@@ -224,56 +234,117 @@ function GraphOS() {
   };
 
   useEffect(() => {
-    const newSocket = io({
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
-    });
+    let shouldReconnect = true;
+    let reconnectAttempts = 0;
+    let reconnectTimer: number | undefined;
+    let activeSocket: WebSocket | null = null;
 
-    setSocket(newSocket);
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+      activeSocket = ws;
+      setSocket(ws);
 
-    newSocket.on('connect', () => setIsConnected(true));
-    newSocket.on('disconnect', () => setIsConnected(false));
+      ws.addEventListener('open', () => {
+        reconnectAttempts = 0;
+        setIsConnected(true);
+      });
 
-    newSocket.on('graph-initial', (state) => {
-      const hydratedNodes = attachNodeIOFromRegistry(state.nodes, nodeTypeRegistryRef.current);
-      nodesRef.current = hydratedNodes as Node[];
-      edgesRef.current = state.edges as Edge[];
-      setNodes(hydratedNodes);
-      setEdges(state.edges);
-    });
+      ws.addEventListener('message', (event) => {
+        if (typeof event.data !== 'string') return;
 
-    newSocket.on('graph-update', (state) => {
-      const hydratedNodes = attachNodeIOFromRegistry(state.nodes, nodeTypeRegistryRef.current);
-      nodesRef.current = hydratedNodes as Node[];
-      edgesRef.current = state.edges as Edge[];
-      setNodes(hydratedNodes);
-      setEdges(state.edges);
-    });
+        let envelope: WsEnvelope | null = null;
+        try {
+          envelope = JSON.parse(event.data) as WsEnvelope;
+        } catch {
+          envelope = null;
+        }
 
-    newSocket.on('graph-list', (list) => {
-      setGraphList(list);
-    });
+        if (!envelope || typeof envelope.type !== 'string') return;
 
-    newSocket.on('graph-created', (newGraph) => {
-      setCurrentGraphId(newGraph.id);
-    });
+        switch (envelope.type) {
+          case 'graph-initial': {
+            const state = envelope.payload as { nodes: Node[]; edges: Edge[] };
+            const hydratedNodes = attachNodeIOFromRegistry(state.nodes, nodeTypeRegistryRef.current);
+            nodesRef.current = hydratedNodes as Node[];
+            edgesRef.current = state.edges as Edge[];
+            setNodes(hydratedNodes);
+            setEdges(state.edges);
+            break;
+          }
+          case 'graph-update': {
+            const state = envelope.payload as { nodes: Node[]; edges: Edge[] };
+            const hydratedNodes = attachNodeIOFromRegistry(state.nodes, nodeTypeRegistryRef.current);
+            nodesRef.current = hydratedNodes as Node[];
+            edgesRef.current = state.edges as Edge[];
+            setNodes(hydratedNodes);
+            setEdges(state.edges);
+            break;
+          }
+          case 'graph-list': {
+            const list = Array.isArray(envelope.payload) ? envelope.payload as { id: string; name: string }[] : [];
+            setGraphList(list);
+            break;
+          }
+          case 'graph-created': {
+            const graph = envelope.payload as { id?: string };
+            if (typeof graph?.id === 'string') {
+              setCurrentGraphId(graph.id);
+            }
+            break;
+          }
+          case 'node-types:updated': {
+            const apiTypes = Array.isArray(envelope.payload) ? envelope.payload as ApiNodeType[] : [];
+            setNodeTypeRegistry(apiTypes.map(toNodeType));
+            break;
+          }
+          case 'graph-selection': {
+            const payload = envelope.payload as { selectedNodeId: string | null };
+            setSelectedNodeId(payload?.selectedNodeId ?? null);
+            break;
+          }
+          case 'graph-history-updated': {
+            const payload = envelope.payload as { graphId: string; history: GraphHistoryEntry[] };
+            if (payload.graphId !== currentGraphIdRef.current) return;
+            setGraphHistory(Array.isArray(payload.history) ? payload.history : []);
+            break;
+          }
+          default:
+            break;
+        }
+      });
 
-    newSocket.on('node-types:updated', (apiTypes: ApiNodeType[]) => {
-      setNodeTypeRegistry(apiTypes.map(toNodeType));
-    });
+      ws.addEventListener('close', () => {
+        if (activeSocket === ws) {
+          activeSocket = null;
+          setSocket((prev) => (prev === ws ? null : prev));
+        }
 
-    newSocket.on('graph-selection', ({ selectedNodeId: remoteSelectedNodeId }: { graphId: string; selectedNodeId: string | null }) => {
-      setSelectedNodeId(remoteSelectedNodeId);
-    });
+        setIsConnected(false);
+        if (!shouldReconnect) return;
+        if (reconnectAttempts >= 10) return;
 
-    newSocket.on('graph-history-updated', ({ graphId, history }: { graphId: string; history: GraphHistoryEntry[] }) => {
-      if (graphId !== currentGraphIdRef.current) return;
-      setGraphHistory(Array.isArray(history) ? history : []);
-    });
+        reconnectAttempts += 1;
+        reconnectTimer = window.setTimeout(connect, 2000);
+      });
+
+      ws.addEventListener('error', () => {
+        ws.close();
+      });
+    };
+
+    connect();
 
     return () => {
-      newSocket.close();
+      shouldReconnect = false;
+      if (reconnectTimer !== undefined) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) {
+        activeSocket.close();
+      }
+      setSocket(null);
+      setIsConnected(false);
     };
   }, [setNodes, setEdges]);
 
@@ -298,22 +369,22 @@ function GraphOS() {
   }, [isGraphTabActive]);
 
   useEffect(() => {
-    if (socket) {
-      socket.emit('join-graph', currentGraphId);
-      socket.emit('get-graph-list');
+    if (socket && isConnected) {
+      sendWs('join-graph', currentGraphId);
+      sendWs('get-graph-list');
     }
-  }, [socket, currentGraphId]);
+  }, [socket, currentGraphId, sendWs, isConnected]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !isConnected) return;
 
     if (selectionGraphIdRef.current !== currentGraphId) {
       selectionGraphIdRef.current = currentGraphId;
       return;
     }
 
-    socket.emit('select-node', { graphId: currentGraphId, nodeId: selectedNodeId });
-  }, [socket, currentGraphId, selectedNodeId]);
+    sendWs('select-node', { graphId: currentGraphId, nodeId: selectedNodeId });
+  }, [socket, currentGraphId, selectedNodeId, sendWs, isConnected]);
 
   useEffect(() => {
     localStorage.setItem(LAST_GRAPH_ID_STORAGE_KEY, currentGraphId);
@@ -437,8 +508,8 @@ function GraphOS() {
     const newEdge = addEdge(params, edgesRef.current);
     setEdges(newEdge);
     edgesRef.current = newEdge;
-    socket?.emit('sync-graph', { graphId: currentGraphId, nodes: nodesRef.current, edges: newEdge });
-  }, [socket, currentGraphId, setEdges, isConnectionAllowed]);
+    sendWs('sync-graph', { graphId: currentGraphId, nodes: nodesRef.current, edges: newEdge });
+  }, [currentGraphId, setEdges, isConnectionAllowed, sendWs]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -480,8 +551,8 @@ function GraphOS() {
 
     const nextNodes = nodes.concat(newNode);
     setNodes(nextNodes);
-    socket?.emit('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
-  }, [nodes, edges, socket, currentGraphId, setNodes, screenToFlowPosition, nodeTypeRegistry]);
+    sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
+  }, [nodes, edges, currentGraphId, setNodes, screenToFlowPosition, nodeTypeRegistry, sendWs]);
 
   const onGraphNodesChange = useCallback((changes: NodeChange[]) => {
     let nextNodes: Node[] = nodesRef.current;
@@ -498,16 +569,16 @@ function GraphOS() {
     );
     if (hasOnlyLocalChanges) return;
 
-    socket?.emit('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges: edgesRef.current });
-  }, [setNodes, socket, currentGraphId]);
+    sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges: edgesRef.current });
+  }, [setNodes, currentGraphId, sendWs]);
 
   const onNodeDragStop = useCallback(() => {
-    socket?.emit('sync-graph', {
+    sendWs('sync-graph', {
       graphId: currentGraphId,
       nodes: nodesRef.current,
       edges: edgesRef.current,
     });
-  }, [socket, currentGraphId]);
+  }, [currentGraphId, sendWs]);
 
   const onGraphEdgesChange = useCallback((changes: EdgeChange[]) => {
     let nextEdges: Edge[] = edgesRef.current;
@@ -516,14 +587,14 @@ function GraphOS() {
       edgesRef.current = nextEdges;
       return nextEdges;
     });
-    socket?.emit('sync-graph', { graphId: currentGraphId, nodes: nodesRef.current, edges: nextEdges });
-  }, [setEdges, socket, currentGraphId]);
+    sendWs('sync-graph', { graphId: currentGraphId, nodes: nodesRef.current, edges: nextEdges });
+  }, [setEdges, currentGraphId, sendWs]);
 
   const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: Node[] }) => {
     const nextSelectedNodeId = selectedNodes[0]?.id || null;
     setSelectedNodeId(nextSelectedNodeId);
-    socket?.emit('select-node', { graphId: currentGraphId, nodeId: nextSelectedNodeId });
-  }, [socket, currentGraphId]);
+    sendWs('select-node', { graphId: currentGraphId, nodeId: nextSelectedNodeId });
+  }, [currentGraphId, sendWs]);
 
   const updateNodeProperty = (id: string, key: string, value: unknown) => {
     const nextNodes = nodes.map((n) =>
@@ -532,7 +603,7 @@ function GraphOS() {
         : n
     );
     setNodes(nextNodes);
-    socket?.emit('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
+    sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
 
     const updatedNode = nextNodes.find((n) => n.id === id);
     if (updatedNode && updatedNode.type) {
@@ -588,21 +659,21 @@ function GraphOS() {
         };
         const nextNodes = nodes.concat(newNode);
         setNodes(nextNodes);
-        socket?.emit('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
+        sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nodes, edges, socket, currentGraphId, selectedNodeId, setNodes]);
+  }, [nodes, edges, currentGraphId, selectedNodeId, setNodes, sendWs]);
 
   const createNewGraph = () => {
-    socket?.emit('create-graph', 'Untitled Graph');
+    sendWs('create-graph', 'Untitled Graph');
   };
 
   const duplicateGraph = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    socket?.emit('duplicate-graph', id);
+    sendWs('duplicate-graph', id);
   };
 
   const startRenaming = (g: { id: string; name: string }, e: React.MouseEvent) => {
@@ -613,14 +684,14 @@ function GraphOS() {
 
   const submitRename = (id: string) => {
     if (tempGraphName.trim()) {
-      socket?.emit('rename-graph', { id, name: tempGraphName });
+      sendWs('rename-graph', { id, name: tempGraphName });
     }
     setEditingGraphId(null);
   };
 
   const deleteGraph = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    socket?.emit('delete-graph', id);
+    sendWs('delete-graph', id);
 
     if (id === currentGraphId) {
       const next = graphList.find((g) => g.id !== id);
@@ -743,7 +814,7 @@ function GraphOS() {
               onSelectionChange={onSelectionChange}
               onDrop={onDrop}
               onDragOver={onDragOver}
-              onInit={() => socket?.emit('join-graph', currentGraphId)}
+              onInit={() => sendWs('join-graph', currentGraphId)}
               t={t}
             />
           ) : (

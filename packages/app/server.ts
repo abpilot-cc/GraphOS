@@ -1,6 +1,6 @@
 import express from "express";
 import { createServer } from "http";
-import { Server } from "socket.io";
+import { WebSocketServer } from "ws";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
@@ -90,9 +90,7 @@ async function startServer(options: ServerOptions) {
 
   const app = express();
   const httpServer = createServer(app);
-  const io = new Server(httpServer, {
-    cors: { origin: "*" },
-  });
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
   app.use(cors());
   app.use(express.json());
@@ -102,15 +100,15 @@ async function startServer(options: ServerOptions) {
   const env = await pluginManager.loadAll();
   pluginManager.watchPlugins(env);
 
+  // --- Routes & WebSocket ---
+  const realtime = registerSocketHandlers(wss, pluginManager);
+  registerRoutes(app, realtime, pluginManager);
+  pluginManager.attachExpressBridge();
+
   // Broadcast updated node types to all connected clients on hot reload
   pluginManager.on("node-types:changed", (nodeTypes) => {
-    io.emit("node-types:updated", normalizeNodeTypes(nodeTypes));
+    realtime.broadcastAll("node-types:updated", normalizeNodeTypes(nodeTypes));
   });
-
-  // --- Routes & WebSocket ---
-  registerRoutes(app, io, pluginManager);
-  registerSocketHandlers(io, pluginManager);
-  pluginManager.attachExpressBridge();
 
   // --- Vite Integration ---
   const appRoot = path.dirname(fileURLToPath(import.meta.url));

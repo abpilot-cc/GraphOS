@@ -16,20 +16,46 @@ export default function Dashboard() {
   const client = useClient();
   const [localLayouts, setLocalLayouts] = useState(state.layouts);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const latestLayoutsRef = useRef(state.layouts);
+  const latestStateRef = useRef(state);
+
+  useEffect(() => {
+    latestStateRef.current = state;
+  }, [state]);
 
   // Sync local layouts when state changes (e.g., undo/redo)
   useEffect(() => {
     setLocalLayouts(state.layouts);
+    latestLayoutsRef.current = state.layouts;
   }, [state.layouts]);
 
   const onLayoutChange = (currentLayout: any, allLayouts: any) => {
+    latestLayoutsRef.current = allLayouts;
     setLocalLayouts(allLayouts);
   };
 
-  const commitLayout = () => {
-    updateState({
-      ...state,
-      layouts: localLayouts,
+  const commitLayout = (currentLayout?: any) => {
+    if (currentLayout) {
+      const currentIds = new Set((currentLayout as any[]).map((item) => item.i));
+      const nextLayouts = { ...latestLayoutsRef.current };
+      const targetBreakpoint = Object.keys(nextLayouts).find((bp) => {
+        const layout = nextLayouts[bp] ?? [];
+        return layout.length === currentLayout.length && layout.every((item: any) => currentIds.has(item.i));
+      });
+
+      if (targetBreakpoint) {
+        nextLayouts[targetBreakpoint] = currentLayout;
+        latestLayoutsRef.current = nextLayouts;
+        setLocalLayouts(nextLayouts);
+      }
+    }
+
+    // Commit on next frame so fast drag-release uses the final layout from react-grid-layout.
+    requestAnimationFrame(() => {
+      updateState({
+        ...latestStateRef.current,
+        layouts: latestLayoutsRef.current,
+      });
     });
   };
 
@@ -98,8 +124,8 @@ export default function Dashboard() {
           rowHeight={80}
           draggableHandle=".cursor-move"
           onLayoutChange={onLayoutChange}
-          onDragStop={commitLayout}
-          onResizeStop={commitLayout}
+          onDragStop={(layout) => commitLayout(layout)}
+          onResizeStop={(layout) => commitLayout(layout)}
           margin={[20, 20]}
         >
           {state.widgets.map((widget) => (

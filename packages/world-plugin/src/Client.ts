@@ -1,12 +1,23 @@
 import { IGraph, INode } from 'graphos-core';
 import React, { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
-import { io, type Socket } from 'socket.io-client';
+
+
+type WsEnvelope<T = unknown> = {
+    type: string;
+    payload?: T;
+};
 
 
 (window as any).GRAPHOS_WORLD_PLUGIN_CLIENT_VERSION = '1.0.6';
 
+export interface IDevice {
+    type: string;
+    [key: string]: any;
+}
+
 export type ClientContextValue = {
-    socket: Socket | null;
+    socket: WebSocket | null;
+    emit: (type: string, payload?: unknown) => void;
     isConnected: boolean;
     state: ClientState;
     graph: IGraph | null;
@@ -15,6 +26,7 @@ export type ClientContextValue = {
     objectSet: Map<string, [IObject[], Map<string, IObject>]>
     focusObject: [IObject, string] | null;
     setFocusObject: (v: [IObject, string] | null) => void;
+    devices: IDevice[];
 };
 
 export type ClientState = {
@@ -60,7 +72,7 @@ const ClientContext = createContext<ClientContextValue | undefined>(undefined);
 let autoId = 0;
 
 export function ClientProvider({ children }: { children: ReactNode }) {
-    const [socket, setSocket] = useState<Socket | null>(null);
+    const [socket, setSocket] = useState<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [state, setState] = useState<ClientState>({ duration: 0, current: 0, state: 'stopped', scale: 1.0, fps: 30 });
     const [graph, setGraph] = useState<IGraph | null>(null);
@@ -68,156 +80,225 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     const [objectSet,] = useState<Map<string, [IObject[], Map<string, IObject>]>>(new Map());
     const [tables, setTables] = useState<ITable[]>([]);
     const [focusObject, setFocusObject] = useState<[IObject, string] | null>(null);
+    const [devices, setDevices] = useState<IDevice[]>([]);
+
+    const emit = (type: string, payload?: unknown) => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        const message: WsEnvelope = { type, payload };
+        socket.send(JSON.stringify(message));
+    };
 
     useEffect(() => {
-        const newSocket = io({
-            transports: ['websocket', 'polling'],
-            reconnectionAttempts: 10,
-            reconnectionDelay: 2000,
-        });
+        let shouldReconnect = true;
+        let reconnectAttempts = 0;
+        let reconnectTimer: number | undefined;
+        let activeSocket: WebSocket | null = null;
 
-        setSocket(newSocket);
+        const send = (ws: WebSocket, type: string, payload?: unknown) => {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            const message: WsEnvelope = { type, payload };
+            ws.send(JSON.stringify(message));
+        };
 
-        newSocket.on('connect', () => {
-            setIsConnected(true);
-            newSocket.emit('world-get-state');
-            newSocket.emit('world-get-graph');
-        });
+        const connect = () => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            activeSocket = ws;
+            setSocket(ws);
 
-        newSocket.on('disconnect', () => setIsConnected(false));
+            ws.addEventListener('open', () => {
+                reconnectAttempts = 0;
+                setIsConnected(true);
+                send(ws, 'world-get-state');
+                send(ws, 'world-get-graph');
+                send(ws, 'world-get-devices');
+            });
 
-        newSocket.on('world-state', (data: ClientState) => {
-            setState(data);
+            ws.addEventListener('message', (event) => {
+                if (typeof event.data !== 'string') return;
 
-        });
-
-        newSocket.on('world-graph', (data: IGraph) => {
-            setGraph(data);
-            let variantSet = new Map<string, INode>();
-            let tables: ITable[] = [];
-            for (let node of data.nodes) {
-                if (node.type === "Variant") {
-                    variantSet.set(node.id, node);
-                } else if (node.type === "Context" || node.type === "World") {
-                    let table: ITable = { id: node.id, name: node.properties.name, keys: [] };
-                    tables.push(table);
+                let envelope: WsEnvelope | null = null;
+                try {
+                    envelope = JSON.parse(event.data) as WsEnvelope;
+                } catch {
+                    envelope = null;
                 }
-            }
 
-            for (let table of tables) {
-                for (let edge of data.edges) {
-                    if (edge[0] === table.id) {
-                        let node = variantSet.get(edge[1]);
-                        if (node) {
-                            table.keys.push(node.properties.name);
+                if (!envelope || typeof envelope.type !== 'string') return;
+
+                if (envelope.type === 'world-state') {
+                    setState(envelope.payload as ClientState);
+                    return;
+                }
+
+                if (envelope.type === 'world-graph') {
+                    const data = envelope.payload as IGraph;
+                    setGraph(data);
+                    let variantSet = new Map<string, INode>();
+                    let tables: ITable[] = [];
+                    for (let node of data.nodes) {
+                        if (node.type === 'Variant') {
+                            variantSet.set(node.id, node);
+                        } else if (node.type === 'Context' || node.type === 'World') {
+                            let table: ITable = { id: node.id, name: node.properties.name, keys: [] };
+                            tables.push(table);
                         }
                     }
-                }
-            }
 
-            setTables(tables);
+                    for (let table of tables) {
+                        for (let edge of data.edges) {
+                            if (edge[0] === table.id) {
+                                let node = variantSet.get(edge[1]);
+                                if (node) {
+                                    table.keys.push(node.properties.name);
+                                }
+                            }
+                        }
+                    }
 
-        });
+                    setTables(tables);
+                    return;
+                }
 
-        newSocket.on('world-event-record', (data: AppRecord) => {
-            window.dispatchEvent(new CustomEvent('world-event-record', { detail: data }));
-            data.id = ++autoId;
-            setRecords((prevRecords) => {
-                if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
-                    return [data, ...prevRecords.slice(0, 19)];
+                if (envelope.type === 'world-device-list') {
+                    const data = envelope.payload as IDevice[];
+                    setDevices(data);
+                    return;
                 }
-                if (data.type === 'set') {
-                    Object.assign(prevRecords[0].data, data.data);
-                    return [...prevRecords];
-                }
-                return [data, ...prevRecords.slice(1, 19)];
-            });
-            if (data.type !== 'event') {
-                let object = data.data as IObject;
-                if (data.type === 'add') {
-                    let vs = objectSet.get(object.table);
-                    if (!vs) {
-                        object = { ...object };
-                        objectSet.set(object.table, [[object], new Map([[object.id, object]])]);
-                    } else {
-                        let v = vs[1].get(object.id);
-                        if (v) {
-                            let i = vs[0].indexOf(v);
-                            if (i !== -1) {
-                                vs[0][i] = object;
+
+                if (envelope.type === 'world-event-record') {
+                    const data = envelope.payload as AppRecord;
+                    window.dispatchEvent(new CustomEvent('world-event-record', { detail: data }));
+                    data.id = ++autoId;
+                    setRecords((prevRecords) => {
+                        if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
+                            return [data, ...prevRecords.slice(0, 19)];
+                        }
+                        if (data.type === 'set') {
+                            Object.assign(prevRecords[0].data, data.data);
+                            return [...prevRecords];
+                        }
+                        return [data, ...prevRecords.slice(1, 19)];
+                    });
+                    if (data.type !== 'event') {
+                        let object = data.data as IObject;
+                        if (data.type === 'add') {
+                            let vs = objectSet.get(object.table);
+                            if (!vs) {
+                                object = { ...object };
+                                objectSet.set(object.table, [[object], new Map([[object.id, object]])]);
                             } else {
-                                vs[0].push(object);
+                                let v = vs[1].get(object.id);
+                                if (v) {
+                                    let i = vs[0].indexOf(v);
+                                    if (i !== -1) {
+                                        vs[0][i] = object;
+                                    } else {
+                                        vs[0].push(object);
+                                    }
+                                    vs[1].set(object.id, object);
+                                } else {
+                                    vs[0].push(object);
+                                    vs[1].set(object.id, object);
+                                }
                             }
-                            vs[1].set(object.id, object);
-                        } else {
-                            vs[0].push(object);
-                            vs[1].set(object.id, object);
-                        }
-                    }
-                } else if (data.type === 'set') {
-                    let vs = objectSet.get(object.table);
-                    if (vs) {
-                        let v = vs[1].get(object.id);
-                        if (v) {
-                            Object.assign(v, object);
-                            object = v;
-                        }
-                    }
-                } else if (data.type === 'del') {
-                    let vs = objectSet.get(object.table);
-                    if (vs) {
-                        let v = vs[1].get(object.id);
-                        if (v) {
-                            let i = vs[0].indexOf(v);
-                            if (i !== -1) {
-                                vs[0].splice(i, 1);
+                        } else if (data.type === 'set') {
+                            let vs = objectSet.get(object.table);
+                            if (vs) {
+                                let v = vs[1].get(object.id);
+                                if (v) {
+                                    Object.assign(v, object);
+                                    object = v;
+                                }
                             }
-                            vs[1].delete(object.id);
+                        } else if (data.type === 'del') {
+                            let vs = objectSet.get(object.table);
+                            if (vs) {
+                                let v = vs[1].get(object.id);
+                                if (v) {
+                                    let i = vs[0].indexOf(v);
+                                    if (i !== -1) {
+                                        vs[0].splice(i, 1);
+                                    }
+                                    vs[1].delete(object.id);
+                                }
+                            }
                         }
+
+                        setTables((prevTables) => {
+                            return [...prevTables];
+                        });
+                        setFocusObject((prevFocus) => {
+                            if (prevFocus && prevFocus[0].id === object.id && prevFocus[0].table === object.table) {
+                                if (data.type === 'del') {
+                                    return null;
+                                }
+                                return [object, prevFocus[1]];
+                            }
+                            return prevFocus;
+                        });
                     }
+                    return;
                 }
 
-                setTables((prevTables) => {
-                    return [...prevTables];
-                });
-                setFocusObject((prevFocus) => {
-                    if (prevFocus && prevFocus[0].id === object.id && prevFocus[0].table === object.table) {
-                        if (data.type === 'del') {
-                            return null;
-                        }
-                        return [object, prevFocus[1]];
-                    }
-                    return prevFocus;
-                });
-            }
-        });
-
-        newSocket.on('world-event-record-clear', () => {
-            window.dispatchEvent(new CustomEvent('world-event-record-clear', {}));
-            setRecords([]);
-            objectSet.clear();
-            setFocusObject(null);
-            setTables((prevTables) => {
-                return [...prevTables];
+                if (envelope.type === 'world-event-record-clear') {
+                    window.dispatchEvent(new CustomEvent('world-event-record-clear', {}));
+                    setRecords([]);
+                    objectSet.clear();
+                    setFocusObject(null);
+                    setTables((prevTables) => {
+                        return [...prevTables];
+                    });
+                }
             });
-        });
+
+            ws.addEventListener('close', () => {
+                if (activeSocket === ws) {
+                    activeSocket = null;
+                    setSocket((prev) => (prev === ws ? null : prev));
+                }
+
+                setIsConnected(false);
+                if (!shouldReconnect) return;
+                if (reconnectAttempts >= 10) return;
+
+                reconnectAttempts += 1;
+                reconnectTimer = window.setTimeout(connect, 2000);
+            });
+
+            ws.addEventListener('error', () => {
+                ws.close();
+            });
+        };
+
+        connect();
 
         const onSendEvent = (e: Event) => {
             if (e instanceof CustomEvent) {
-                newSocket.emit('world-send-event', e.detail);
+                const ws = activeSocket;
+                if (!ws) return;
+                send(ws, 'world-send-event', e.detail);
             }
         };
 
         window.addEventListener('world-send-event', onSendEvent);
 
         return () => {
+            shouldReconnect = false;
+            if (reconnectTimer !== undefined) {
+                window.clearTimeout(reconnectTimer);
+            }
             window.removeEventListener('world-send-event', onSendEvent);
-            newSocket.close();
+            if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) {
+                activeSocket.close();
+            }
+            setSocket(null);
+            setIsConnected(false);
         };
     }, [objectSet]);
 
-    const value = useMemo<ClientContextValue>(() => ({ socket, isConnected, state: state, graph: graph, records: records, tables: tables, objectSet: objectSet, focusObject, setFocusObject }),
-        [socket, isConnected, state, graph, records, tables, objectSet, focusObject]);
+    const value = useMemo<ClientContextValue>(() => ({ socket, emit, isConnected, state: state, graph: graph, records: records, tables: tables, objectSet: objectSet, focusObject, setFocusObject, devices }),
+        [socket, isConnected, state, graph, records, tables, objectSet, focusObject, devices]);
 
     return React.createElement(ClientContext.Provider, { value }, children);
 }

@@ -1,12 +1,30 @@
 import { useState, useCallback, useEffect } from 'react';
 import { DashboardState } from '../types';
 import { INITIAL_STATE, STORAGE_KEY } from '../constants';
-import { cloneDeep, isEqual } from 'lodash';
+import { isEqual } from 'lodash';
+
+function sanitizeLayouts(state: DashboardState): DashboardState {
+  const layouts = Object.fromEntries(
+    Object.entries(state.layouts).map(([breakpoint, items]) => [
+      breakpoint,
+      items.map(({ moved, static: isStatic, ...layout }) => {
+        void moved;
+        void isStatic;
+        return layout;
+      }),
+    ]),
+  );
+
+  return {
+    ...state,
+    layouts,
+  };
+}
 
 export function useLayoutHistory() {
   const [state, setState] = useState<DashboardState>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : INITIAL_STATE;
+    return saved ? sanitizeLayouts(JSON.parse(saved) as DashboardState) : INITIAL_STATE;
   });
 
   const [history, setHistory] = useState<DashboardState[]>([]);
@@ -18,12 +36,14 @@ export function useLayoutHistory() {
   }, [state]);
 
   const updateState = useCallback((newState: DashboardState) => {
+    const sanitizedState = sanitizeLayouts(newState);
+
     setState((current) => {
-      if (isEqual(current, newState)) return current;
+      if (isEqual(current, sanitizedState)) return current;
       
       setHistory((prev) => [...prev, current]);
       setFuture([]); // Clear future on new action
-      return newState;
+      return sanitizedState;
     });
   }, []);
 

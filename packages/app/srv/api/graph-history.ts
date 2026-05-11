@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import type { Server } from "socket.io";
 import type { PluginManager } from "../plugin-manager.ts";
+import type { RealtimeServer } from "../realtime.ts";
 import {
   getGraphSelectionState,
   getWorkingDir,
@@ -34,7 +34,7 @@ export function handleGetGraphHistory() {
   };
 }
 
-export function handlePostGraphHistoryRestore(io: Server, pluginManager: PluginManager) {
+export function handlePostGraphHistoryRestore(realtime: RealtimeServer, pluginManager: PluginManager) {
   return (req: Request, res: Response) => {
     const graphId = resolveGraphId(req.body?.graphId);
     const recordId = typeof req.body?.recordId === "string" ? req.body.recordId.trim() : "";
@@ -69,14 +69,14 @@ export function handlePostGraphHistoryRestore(io: Server, pluginManager: PluginM
       !snapshot.nodes.some((node) => node.id === selectionState.selectedNodeId)
     ) {
       setSelectedNodeId(graphId, null);
-      io.to(graphId).emit("graph-selection", { graphId, selectedNodeId: null });
+      realtime.broadcastGraph(graphId, "graph-selection", { graphId, selectedNodeId: null });
     }
 
     const rfGraph = toRFGraph(snapshot);
     const history = listGraphHistory(getWorkingDir(), graphId);
-    io.to(graphId).emit("graph-update", rfGraph);
-    io.to(graphId).emit("graph-history-updated", { graphId, history });
-    io.emit("graph-list", listGraphs());
+    realtime.broadcastGraph(graphId, "graph-update", rfGraph);
+    realtime.broadcastGraph(graphId, "graph-history-updated", { graphId, history });
+    realtime.broadcastAll("graph-list", listGraphs());
     pluginManager.emitAppEvent("changed", { type: "changed", data: snapshot });
 
     res.json({
