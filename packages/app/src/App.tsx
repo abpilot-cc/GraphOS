@@ -632,10 +632,27 @@ function GraphOS() {
     }
   };
 
+  const isEditingShortcutTarget = (target: EventTarget | null) => {
+    const element = target instanceof HTMLElement
+      ? target
+      : document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    if (!element) return false;
+
+    if (element.closest('input, textarea, select, [contenteditable="true"]')) {
+      return true;
+    }
+
+    return Boolean(element.closest('.monaco-editor'));
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (isEditingShortcutTarget(e.target) || isEditingShortcutTarget(document.activeElement)) {
+        return;
+      }
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         const node = nodes.find((n) => n.id === selectedNodeId);

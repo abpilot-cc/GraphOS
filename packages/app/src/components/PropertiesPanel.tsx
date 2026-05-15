@@ -1,6 +1,25 @@
 import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
-import { Monitor } from 'lucide-react';
+import MonacoEditor from '@monaco-editor/react';
+import { Maximize2, Monitor, X } from 'lucide-react';
+
+function useAppTheme(): 'light' | 'dark' {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const t = document.documentElement.getAttribute('data-theme');
+    return t === 'light' ? 'light' : 'dark';
+  });
+  useEffect(() => {
+    const handler = () => {
+      const t = document.documentElement.getAttribute('data-theme');
+      setTheme(t === 'light' ? 'light' : 'dark');
+    };
+    window.addEventListener('app-theme', handler);
+    return () => window.removeEventListener('app-theme', handler);
+  }, []);
+  return theme;
+}
 import type { Node } from 'reactflow';
 
 import type { NodePropertyDef, NodeType } from '../types/graph';
@@ -21,6 +40,14 @@ interface PropertiesPanelProps {
   openAdvancedSchemaEditor: (nodeId: string, key: string, value: unknown) => void;
 }
 
+type FullscreenCodeTarget = {
+  nodeId: string;
+  key: string;
+  lang: string;
+  displayName: string;
+  value: string;
+};
+
 export default function PropertiesPanel({
   selectedNode,
   nodeTypeRegistry,
@@ -30,7 +57,31 @@ export default function PropertiesPanel({
   updateNodeProperty,
   openAdvancedSchemaEditor,
 }: PropertiesPanelProps) {
-  return (
+  const appTheme = useAppTheme();
+  const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'vs';
+  const [fullscreenCode, setFullscreenCode] = useState<FullscreenCodeTarget | null>(null);
+  const fullscreenValueRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!fullscreenCode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeFullscreen();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreenCode]);
+
+  const openFullscreen = (target: FullscreenCodeTarget) => {
+    fullscreenValueRef.current = target.value;
+    setFullscreenCode(target);
+  };
+
+  const closeFullscreen = () => {
+    setFullscreenCode(null);
+  };
+
+  return (<>
     <aside className={`border-l border-panel-border bg-panel-bg flex flex-col z-10 transition-all duration-300 relative shadow-2xl ${selectedNode ? 'w-80' : 'w-0 opacity-0 overflow-hidden border-none'}`}>
       <div className="w-80 flex-shrink-0 flex flex-col h-full">
         <div className="p-6 border-b border-panel-border">
@@ -145,6 +196,47 @@ export default function PropertiesPanel({
                 );
               }
 
+              if (typeof editor === 'string' && editor.startsWith('code/')) {
+                const lang = editor.slice('code/'.length) || 'plaintext';
+                return (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      {label}
+                      <button
+                        type="button"
+                        title="Fullscreen editor"
+                        onClick={() => openFullscreen({ nodeId: selectedNode.id, key, lang, displayName, value: String(value) })}
+                        className="p-1 rounded hover:bg-canvas-bg text-text-secondary hover:text-blue-400 transition-colors"
+                      >
+                        <Maximize2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div
+                      className="rounded-lg overflow-hidden border border-panel-border"
+                      style={{ height: 200 }}
+                    >
+                      <MonacoEditor
+                        height="200px"
+                        language={lang}
+                        value={String(value)}
+                        theme={monacoTheme}
+                        options={{
+                          minimap: { enabled: false },
+                          fontSize: 12,
+                          lineNumbers: 'on',
+                          scrollBeyondLastLine: false,
+                          wordWrap: 'on',
+                          tabSize: 2,
+                          automaticLayout: true,
+                        }}
+                        onChange={(v) => updateNodeProperty(selectedNode.id, key, v ?? '')}
+                      />
+                    </div>
+                    {def.description && <p className="text-[10px] text-text-secondary">{def.description}</p>}
+                  </div>
+                );
+              }
+
               if (editor === 'textarea') {
                 return (
                   <div key={key} className="space-y-1">
@@ -225,5 +317,67 @@ export default function PropertiesPanel({
         </div>
       </div>
     </aside>
-  );
+
+    {fullscreenCode && createPortal(
+      <div
+        className="fixed inset-0 z-[9999] flex flex-col"
+        style={{ background: appTheme === 'dark' ? '#1e1e1e' : '#ffffff' }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-2 border-b"
+          style={{ borderColor: appTheme === 'dark' ? '#333' : '#e5e7eb' }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold" style={{ color: appTheme === 'dark' ? '#d4d4d4' : '#111827' }}>
+              {fullscreenCode.displayName}
+            </span>
+            <span
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider"
+              style={{
+                background: appTheme === 'dark' ? '#2d2d2d' : '#f3f4f6',
+                color: appTheme === 'dark' ? '#9ca3af' : '#6b7280',
+              }}
+            >
+              {fullscreenCode.lang}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={closeFullscreen}
+            className="p-1.5 rounded transition-colors"
+            style={{ color: appTheme === 'dark' ? '#9ca3af' : '#6b7280' }}
+            title="Close (Esc)"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Editor */}
+        <div className="flex-1 overflow-hidden">
+          <MonacoEditor
+            height="100%"
+            language={fullscreenCode.lang}
+            defaultValue={fullscreenCode.value}
+            theme={monacoTheme}
+            options={{
+              minimap: { enabled: true },
+              fontSize: 14,
+              lineNumbers: 'on',
+              scrollBeyondLastLine: false,
+              wordWrap: 'on',
+              tabSize: 2,
+              automaticLayout: true,
+              padding: { top: 12 },
+            }}
+            onChange={(v) => {
+              fullscreenValueRef.current = v ?? '';
+              updateNodeProperty(fullscreenCode.nodeId, fullscreenCode.key, v ?? '');
+            }}
+          />
+        </div>
+      </div>,
+      document.body,
+    )}
+  </>);
 }

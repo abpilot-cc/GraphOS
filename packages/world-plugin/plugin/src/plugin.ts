@@ -6,6 +6,7 @@ import os from "os";
 import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
 import { App, MemStorage, type AddEvent, type DelEvent, type GetEvent, type IEvent, type IEventSource, type IObject, type SetEvent } from "./index.js";
+import { genCocosCreator } from "./genCocosCreator.js";
 
 type AppRecord = {
     time: number;
@@ -27,6 +28,8 @@ type PluginSocket = {
     readyState?: number;
     OPEN?: number;
     device?: { type: string };
+    app?: App | undefined;
+    worldContext?: IEventSource<IObject> | undefined;
     __wsEventHandlers?: Map<string, Set<(payload: unknown) => void>>;
     __wsMessageListener?: (raw: unknown) => void;
 };
@@ -208,7 +211,7 @@ export default function install(app: IApp, env: any) {
             }
         },
         inTypes: ['World', 'Context', 'Event'],
-        outTypes: [],
+        outTypes: ['View'],
     })
 
 
@@ -305,6 +308,30 @@ export default function install(app: IApp, env: any) {
         outTypes: [],
     })
 
+    app.addNodeType({
+        type: "View",
+        description: "Presentation-layer mapping node for a Variant. A View defines how a Variant value should be transformed into display text (or a display-friendly string) for UI rendering, logs, and AI-generated front-end behavior descriptions. Use this node to specify readable labels, formatting conventions, and compositional output rules without changing source business data.",
+        properties: {
+            "name": {
+                type: "string",
+                description: "View field name or output alias. This is the semantic identifier used by UI/AI pipelines to reference this display rule, for example 'titleText', 'subtitle', 'badgeLabel', or 'summaryLine'.",
+                required: true,
+            },
+            "description": {
+                type: "string",
+                description: "Natural-language intent for this display rule. Describe what users should see, in which scenario it appears, tone/style requirements, fallback expectations, and any localization notes. AI agents should treat this as primary guidance when generating or explaining UI behavior.",
+                editor: 'textarea',
+            },
+            "valueScriptCode": {
+                type: "string",
+                description: "JavaScript function body that computes and returns the display value for this View. Write plain JavaScript code and use `return` to produce the output. Built-in variables available in scope: `value` (the current value of the associated Variant — may be a primitive or object depending on the Variant type), `object` (the Context object instance that owns this Variant, giving access to sibling fields). The return value is used directly as the display output; return a string for text rendering, or any serializable value for structured consumers. Example: `if (!value) return '—'; return value.firstName + ' ' + value.lastName + ' (' + object.role + ')';`",
+                editor: 'code/javascript',
+            },
+        },
+        inTypes: ['Variant'],
+        outTypes: [],
+    })
+
     let graph: IGraph | undefined;
     let socketSet = new Set<PluginSocket>();
 
@@ -328,6 +355,7 @@ export default function install(app: IApp, env: any) {
     const emitDeviceList = () => {
         let devices = getDevices();
         for (const socket of socketSet) {
+            if (socket.device) continue;
             emitSocketEvent(socket, 'world-device-list', devices);
         }
     };
@@ -345,8 +373,8 @@ export default function install(app: IApp, env: any) {
 
     app.on("changed", (event) => {
         setGraph(event.data);
-        if (env && env.world && env.world.genTypeScript) {
-            const gen = path.join(env.workDir, "gen");
+        if (env && env.world && env.world.genTypeScript && env.world.genTypeScript.enabled) {
+            const gen = path.join(env.workDir, env.world.genTypeScript.outDir || "gen");
             try {
                 const codeFiles = genTypeScript(event.data);
                 fs.mkdirSync(gen, { recursive: true });
@@ -354,7 +382,20 @@ export default function install(app: IApp, env: any) {
                     fs.writeFileSync(path.join(gen, file.name), file.content, "utf-8");
                 }
             } catch (err: any) {
-                console.error("Error generating TypeScript code for World model:", err.stack || err);
+                console.error("Error generating TypeScript code for World:", err.stack || err);
+            }
+        }
+
+        if (env && env.world && env.world.genCocosCreator && env.world.genCocosCreator.enabled) {
+            const gen = path.join(env.workDir, env.world.genCocosCreator.outDir || "gen");
+            try {
+                const codeFiles = genCocosCreator(event.data);
+                fs.mkdirSync(gen, { recursive: true });
+                for (let file of codeFiles) {
+                    fs.writeFileSync(path.join(gen, file.name), file.content, "utf-8");
+                }
+            } catch (err: any) {
+                console.error("Error generating Cocos Creator code for World:", err.stack || err);
             }
         }
     });
@@ -445,6 +486,7 @@ export default function install(app: IApp, env: any) {
 
         const onLoadApp = () => {
             app = new App(new MemStorage());
+            socketLike.app = app;
             onInit();
             const sourceDistPath = path.join(env.workDir, "dist");
             if (loadedTmpDir) {
@@ -475,6 +517,7 @@ export default function install(app: IApp, env: any) {
                         const e = await import(url);
                         const fn: (app: App) => IEventSource<IObject> = e.default;
                         worldContext = fn(app);
+                        socketLike.worldContext = worldContext;
                     }
                     catch (e) {
                         console.error(`Error loading or executing ${entryPath}:`, e);
@@ -532,6 +575,9 @@ export default function install(app: IApp, env: any) {
             fps = 30;
             isPaused = false;
             app = undefined;
+            worldContext = undefined;
+            socketLike.app = undefined;
+            socketLike.worldContext = undefined;
             records.splice(0, records.length);
             if (tv) clearTimeout(tv);
             tv = undefined;
@@ -576,18 +622,35 @@ export default function install(app: IApp, env: any) {
         });
 
         onEvent('world-send-event', (data) => {
-            console.log('Received event from client:', data);
-            if (!data || typeof data !== 'object' || !worldContext || !app) return;
+
+            console.log('Received event from client:', data, socketLike.device);
+
+            if (!data || typeof data !== 'object') return;
 
             const eventData = data as Record<string, unknown>;
             if (typeof eventData.type !== 'string') return;
 
-            const triggerEvent = { ...eventData, source: worldContext } as IEvent<IObject>;
-            let item: AppRecord = { time: duration, type: 'event', data: eventData as unknown as IEvent<IObject> };
-            records.push(item);
-            app.trigger(triggerEvent);
-            emit('world-event-record', item);
-            emitDevicesEvent('world-event-record', item);
+            if (socketLike.device) {
+                for (let socket of socketSet) {
+                    if (socket.app && socket.worldContext) {
+                        const triggerEvent = { ...eventData, source: socket.worldContext } as IEvent<IObject>;
+                        let item: AppRecord = { time: duration, type: 'event', data: eventData as unknown as IEvent<IObject> };
+                        records.push(item);
+                        socket.app.trigger(triggerEvent);
+                        emit('world-event-record', item);
+                        emitDevicesEvent('world-event-record', item);
+                    }
+                }
+                return;
+            } else if (app && worldContext) {
+                const triggerEvent = { ...eventData, source: worldContext } as IEvent<IObject>;
+                let item: AppRecord = { time: duration, type: 'event', data: eventData as unknown as IEvent<IObject> };
+                records.push(item);
+                app.trigger(triggerEvent);
+                emit('world-event-record', item);
+                emitDevicesEvent('world-event-record', item);
+            }
+
         });
 
         onEvent<{ type: string }>('world-device', (device) => {

@@ -273,8 +273,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
 
         connect();
 
-        const onSendEvent = (e: Event) => {
-            if (e instanceof CustomEvent) {
+        const onSendEvent = (e: any) => {
+            if (e.detail) {
                 const ws = activeSocket;
                 if (!ws) return;
                 send(ws, 'world-send-event', e.detail);

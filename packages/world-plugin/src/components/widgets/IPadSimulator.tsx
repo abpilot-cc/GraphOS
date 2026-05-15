@@ -255,7 +255,7 @@ export function IPadSimulator() {
           <div className="flex-1 bg-white rounded-[2rem] overflow-hidden relative shadow-inner">
             <iframe
               src={url}
-              className="w-full h-full border-none pointer-events-none"
+              className="w-full h-full border-none"
               title="Device Simulator View"
             />
 
@@ -288,9 +288,9 @@ export function IPadSimulator() {
               )}
             </AnimatePresence>
 
-            <div className="absolute inset-0 bg-black/5 pointer-events-none flex items-center justify-center">
+            {/* <div className="absolute inset-0 bg-black/5 pointer-events-none flex items-center justify-center">
               <span className="text-xl text-zinc-400 font-mono opacity-20 select-none tracking-[0.5em] uppercase">Simulated View</span>
-            </div>
+            </div> */}
           </div>
 
           <div className={`flex items-center justify-center p-2 transition-all duration-500 
