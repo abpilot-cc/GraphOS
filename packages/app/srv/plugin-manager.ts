@@ -102,7 +102,7 @@ export class PluginManager extends EventEmitter {
     super();
     this.workDir = workDir;
     this.expressApp = expressApp;
-    this.graphosDir = path.join(workDir, ".graphos");
+    this.graphosDir = workDir;
   }
 
   attachExpressBridge(): void {
@@ -157,18 +157,48 @@ export class PluginManager extends EventEmitter {
 
       const raw = fs.readFileSync(packageJsonPath, "utf-8");
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const deps = parsed.dependencies;
+      const deps = parsed.devDependencies;
       const graphosConfig = parsed.graphos && typeof parsed.graphos === "object"
         ? parsed.graphos as Record<string, unknown>
         : undefined;
+      const env = graphosConfig ? { ...graphosConfig, workDir: this.workDir } : { workDir: this.workDir };
       if (!deps || typeof deps !== "object") {
-        return [[], graphosConfig ? { ...graphosConfig, workDir: this.workDir } : { workDir: this.workDir }];
+        return [[], env];
       }
 
-      return [Object.keys(deps as Record<string, unknown>), graphosConfig ? { ...graphosConfig, workDir: this.workDir } : { workDir: this.workDir }];
+      const dependencyNames = Object.keys(deps as Record<string, unknown>);
+      const pluginDependencies: string[] = [];
+
+      for (const depName of dependencyNames) {
+        const depPackageJsonPath = path.join(this.graphosDir, "node_modules", depName, "package.json");
+        if (!fs.existsSync(depPackageJsonPath)) {
+          continue;
+        }
+
+        try {
+          const depRaw = fs.readFileSync(depPackageJsonPath, "utf-8");
+          const depParsed = JSON.parse(depRaw) as Record<string, unknown>;
+          const graphos = depParsed.graphos;
+          const plugin = graphos && typeof graphos === "object"
+            ? (graphos as Record<string, unknown>).plugin
+            : undefined;
+          const entry = plugin && typeof plugin === "object"
+            ? (plugin as Record<string, unknown>).entry
+            : undefined;
+
+          if (typeof entry === "string" && entry.trim()) {
+            pluginDependencies.push(depName);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[PluginManager] Skipping dependency '${depName}' because its package.json could not be read: ${message}`);
+        }
+      }
+
+      return [pluginDependencies, env];
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[PluginManager] Failed reading GraphOS dependencies: ${message}`);
+      console.warn(`[PluginManager] Failed reading GraphOS devDependencies: ${message}`);
       return [[], null];
     }
   }
@@ -238,7 +268,7 @@ export class PluginManager extends EventEmitter {
       for (const name of this.plugins.keys()) {
         this.unloadPlugin(name);
       }
-      console.log("[PluginManager] No plugin dependencies found in .graphos/package.json");
+      console.log("[PluginManager] No plugin packages with graphos.plugin.entry found in .graphos/package.json");
       return env;
     }
 

@@ -26,12 +26,65 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 - You need to convert business domains into nested Context trees.
 - You need typed data variables (Variant) before writing lifecycle logic.
 - You need event-driven initialization or runtime flows (for example game startup).
+- You need to bootstrap a fresh npm + TypeScript world project with GraphOS generation config.
 
 ## Preconditions
 
 1. Load and use `graph-management` skill first.
 2. Read available node types and current graph state before mutation.
 3. Use one coherent transaction per design step when possible.
+
+## Project Bootstrap (npm + TypeScript)
+
+Use this when the user asks to initialize a new world logic project.
+
+1. Initialize npm project and install TypeScript + Node typings:
+
+```bash
+npm init -y
+npm i -D typescript @types/node
+```
+
+2. Install `graphos-world-plugin` as dev dependency:
+
+```bash
+npm i -D graphos-world-plugin
+```
+
+3. Ensure `package.json` contains the following `graphos` config:
+
+```json
+{
+   "graphos": {
+      "world": {
+         "genTypeScript": {
+            "enabled": true,
+            "outDir": "gen"
+         },
+         "genCocosCreator": {
+            "enabled": false,
+            "outDir": "../cocos/assets/gen"
+         }
+      }
+   }
+}
+```
+
+4. Ensure `package.json` scripts includes:
+
+```json
+{
+   "scripts": {
+      "graphos": "graphos"
+   }
+}
+```
+
+5. Optional verification:
+
+```bash
+npm run graphos -- --help
+```
 
 ## Modification Rules (Mandatory Order)
 
