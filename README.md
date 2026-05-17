@@ -27,7 +27,7 @@ GraphOS 追求 **“零成本集成”**。你只需要安装技能，运行时�
 ### 1. 安装技能
 在你的 Agent 项目中，通过 `npx skills` 安装 GraphOS 技能包：
 ```bash
-npx skills install @graphos/skill-management
+npx skills install abpilot-cc/GraphOS
 ```
 
 ### 2. 自动启动 (Zero Config)
