@@ -56,6 +56,7 @@ npm i -D graphos-world-plugin graphos-cli
 
 ```json
 {
+   "type": "module",
    "graphos": {
       "world": {
          "genTypeScript": {
@@ -81,7 +82,7 @@ npm i -D graphos-world-plugin graphos-cli
 {
    "scripts": {
       "graphos": "graphos",
-      "build": "tsc",
+      "build": "tsc -p tsconfig.world.json",
       "test:logic": "tsc -p tsconfig.world.json && node dist/test.js"
    }
 }
@@ -99,8 +100,7 @@ npm i -D graphos-world-plugin graphos-cli
       "esModuleInterop": true,
       "forceConsistentCasingInFileNames": true,
       "skipLibCheck": true,
-      "outDir": "dist",
-      "rootDir": "src"
+      "outDir": "dist"
    },
    "include": ["src/**/*.ts","gen/**/*.ts"],
    "exclude": ["node_modules", "dist"]
@@ -171,9 +171,9 @@ Suggested `src/test.ts` responsibilities:
 Recommended `src/test.ts` initialization example:
 
 ```ts
-import { App, MemStorage } from 'graphos-world-plugin';
-import { WorldContext } from '../gen/World.js';
-import createWorldContext from './app.js';
+import { App, MemStorage } from 'graphos-world-plugin'; // Do not modify this fixed access pattern.
+import { WorldContext } from '../gen/World.js'; // Do not modify this fixed access pattern.
+import createWorldContext from './app.js'; // Do not modify this fixed access pattern.
 
 let _app: App = new App(new MemStorage());
 let _world: WorldContext = createWorldContext(_app);
