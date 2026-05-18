@@ -308,6 +308,64 @@ Implementation guidance:
 - Do not fetch singleton `Context` instances through positional access such as `get...Children()[0]`, because order-based lookup is unstable and obscures identity.
 - After implementing a `System`, register it in `src/app.ts` with `app.addSystem(...)`; generated code is not complete until runtime registration is wired.
 
+### World Startup Entry Design (Mandatory)
+
+Goal: define a clear and deterministic startup entry for world logic initialization.
+
+You must implement one or both of the following startup patterns based on domain needs:
+
+1. Initialize required `Context` in a `System.spawn` mounted under `World`.
+   - Add a bootstrap system node under `World` (for example `WorldBootstrapSystem`).
+   - In `spawn`, initialize the required root/domain Context instances using get-or-create semantics.
+   - Keep initialization idempotent: repeated `spawn` calls must not create duplicate singleton Context data.
+2. Define a startup `Event` and mount an `EventSystem` to complete startup Context initialization.
+   - Add a startup event under `World` (for example `WorldStartupRequested`).
+   - Add an `EventSystem` under that event (for example `InitWorldContextsOnStartupEventSystem`).
+   - In `handle`, initialize any Context that depends on startup trigger input or staged startup order.
+
+Recommended split of responsibilities:
+- `System.spawn`: baseline/default world Context bootstrap that should exist before runtime flows.
+- Startup `EventSystem`: trigger-driven or staged initialization that may depend on startup payload/order.
+
+TypeScript example (`System.spawn` for baseline initialization):
+
+```ts
+import type { ISystem } from 'graphos-world-plugin';
+import { WorldContext } from '../gen/World';
+
+export function createWorldBootstrapSystem(): ISystem<WorldContext> {
+   return {
+      spawn(ctx: WorldContext): void {
+         // get-or-create required singleton contexts here
+         // e.g. ctx.getGameplayById('gameplay') ?? ctx.createGameplay({ id: 'gameplay' })
+      },
+   };
+}
+```
+
+TypeScript example (startup `EventSystem` for triggered initialization):
+
+```ts
+import type { ISystem } from 'graphos-world-plugin';
+import type { WorldContext, IWorldStartupRequestedEvent } from '../gen/World';
+
+export type InitWorldContextsOnStartupEventSystem = ISystem<WorldContext, IWorldStartupRequestedEvent>;
+
+export function createInitWorldContextsOnStartupEventSystem(): InitWorldContextsOnStartupEventSystem {
+   return {
+      handle(event: IWorldStartupRequestedEvent): void {
+         // initialize startup-dependent contexts here
+         // use get-or-create to avoid duplicates on retry/replay
+      },
+   };
+}
+```
+
+Required registration and trigger wiring in `src/app.ts`:
+- Register the World bootstrap system with `app.addSystem(WorldContext.Table, createWorldBootstrapSystem())`.
+- Register startup event handler with `app.addEventSystem('WorldStartupRequested', createInitWorldContextsOnStartupEventSystem())`.
+- Ensure startup event is dispatched once by your runtime bootstrap flow and remains safe on retry.
+
 ### Step 3: Define Events and EventSystems
 
 Goal: model event-driven flows after data and lifecycle foundations are stable.
