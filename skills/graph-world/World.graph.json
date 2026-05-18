@@ -1,0 +1,1738 @@
+{
+  "id": "graph_1778369561943",
+  "name": "World",
+  "nodes": [
+    {
+      "id": "node_1778369587486",
+      "type": "World",
+      "properties": {
+        "name": "World",
+        "description": "Merge Chicken"
+      },
+      "position": [
+        -304.981815935552,
+        -693.0256881111237
+      ]
+    },
+    {
+      "id": "node_1778369647035",
+      "type": "Context",
+      "properties": {
+        "name": "Game",
+        "description": "游戏共享数据"
+      },
+      "position": [
+        -352.5100967912303,
+        -480.6833187688417
+      ]
+    },
+    {
+      "id": "node_1778369682922",
+      "type": "Variant",
+      "properties": {
+        "name": "time",
+        "type": "float",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "游戏时间"
+      },
+      "position": [
+        23.867598381758,
+        -433.34737035674885
+      ]
+    },
+    {
+      "id": "node_1778369713756",
+      "type": "Variant",
+      "properties": {
+        "name": "gold",
+        "type": "integer",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "金币"
+      },
+      "position": [
+        327.18793674144905,
+        -434.1270687752851
+      ]
+    },
+    {
+      "id": "node_1778369802238",
+      "type": "Variant",
+      "properties": {
+        "name": "wave",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "integer"
+            },
+            "count": {
+              "type": "integer"
+            },
+            "max_count": {
+              "type": "integer"
+            },
+            "end_time": {
+              "type": "number"
+            },
+            "state": {
+              "type": "string"
+            },
+            "start_time": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "value",
+            "count",
+            "max_count",
+            "end_time",
+            "state",
+            "start_time"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "第几波敌人"
+      },
+      "position": [
+        622.3523354174331,
+        -434.90676719382134
+      ]
+    },
+    {
+      "id": "node_1778369839154",
+      "type": "Context",
+      "properties": {
+        "name": "Ally",
+        "description": "我方单位：小鸡"
+      },
+      "position": [
+        -571.3543482737567,
+        -310.70339688121067
+      ]
+    },
+    {
+      "id": "node_1778370542979",
+      "type": "Context",
+      "properties": {
+        "name": "Enemy",
+        "description": "敌方单位：狗"
+      },
+      "position": [
+        -588.0524346771896,
+        -171.8591254040677
+      ]
+    },
+    {
+      "id": "node_1778370582463",
+      "type": "Variant",
+      "properties": {
+        "name": "level",
+        "type": "integer",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "等级"
+      },
+      "position": [
+        -271.47444465207127,
+        -281.0676684481007
+      ]
+    },
+    {
+      "id": "node_1778370622039",
+      "type": "Variant",
+      "properties": {
+        "name": "attack",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "speed": {
+              "type": "number"
+            },
+            "range": {
+              "type": "integer"
+            },
+            "damage": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "speed",
+            "range",
+            "damage"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "攻击"
+      },
+      "position": [
+        28.265932429934878,
+        -280.7398297891563
+      ]
+    },
+    {
+      "id": "node_1778370843161",
+      "type": "Variant",
+      "properties": {
+        "name": "health",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "integer"
+            },
+            "max": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "value",
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "生命"
+      },
+      "position": [
+        2061.856620289417,
+        -433.9778166152502
+      ]
+    },
+    {
+      "id": "node_1778371068693",
+      "type": "Variant",
+      "properties": {
+        "name": "skin",
+        "type": "string",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "皮肤"
+      },
+      "position": [
+        339.09751527849187,
+        -280.00255501591175
+      ]
+    },
+    {
+      "id": "node_1778371089065",
+      "type": "Variant",
+      "properties": {
+        "name": "level",
+        "type": "integer",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "等级"
+      },
+      "position": [
+        -276.8029028282589,
+        -104.32681961660133
+      ]
+    },
+    {
+      "id": "node_1778371098676",
+      "type": "Variant",
+      "properties": {
+        "name": "attack",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "speed": {
+              "type": "number"
+            },
+            "damage": {
+              "type": "integer"
+            },
+            "radius": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "speed",
+            "damage",
+            "radius"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "攻击"
+      },
+      "position": [
+        11.605359709700338,
+        -103.99898095765694
+      ]
+    },
+    {
+      "id": "node_1778371151233",
+      "type": "Variant",
+      "properties": {
+        "name": "health",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "integer"
+            },
+            "max": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "value",
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "生命"
+      },
+      "position": [
+        302.4228282846054,
+        -104.79459331622586
+      ]
+    },
+    {
+      "id": "node_1778371185185",
+      "type": "Variant",
+      "properties": {
+        "name": "move",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "speed": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "speed"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "移动"
+      },
+      "position": [
+        593.2804349151427,
+        -105.55006761916226
+      ]
+    },
+    {
+      "id": "node_1778371595975",
+      "type": "Variant",
+      "properties": {
+        "name": "grid",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "width": {
+              "type": "integer"
+            },
+            "height": {
+              "type": "integer"
+            },
+            "size": {
+              "type": "number"
+            },
+            "tiles": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          },
+          "required": [
+            "width",
+            "height",
+            "size",
+            "tiles"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "地图"
+      },
+      "position": [
+        909.0955253218369,
+        -436.2813874521817
+      ]
+    },
+    {
+      "id": "node_1778372235976",
+      "type": "Variant",
+      "properties": {
+        "name": "skin",
+        "type": "string",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "皮肤"
+      },
+      "position": [
+        883.8132416894559,
+        -105.3066701813015
+      ]
+    },
+    {
+      "id": "node_1778372274661",
+      "type": "Variant",
+      "properties": {
+        "name": "pos",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "位置 (Grid 整型位置）"
+      },
+      "position": [
+        629.0805189812577,
+        -277.4556759027148
+      ]
+    },
+    {
+      "id": "node_1778372322808",
+      "type": "Event",
+      "properties": {
+        "name": "Merge",
+        "description": "合并"
+      },
+      "position": [
+        -948.7430401670326,
+        169.31650866619265
+      ]
+    },
+    {
+      "id": "node_1778372362683",
+      "type": "Variant",
+      "properties": {
+        "name": "ally_id",
+        "type": "string",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "我方单位ID：小鸡ID"
+      },
+      "position": [
+        -597.3150244288455,
+        163.10225302153262
+      ]
+    },
+    {
+      "id": "node_1778372394431",
+      "type": "Variant",
+      "properties": {
+        "name": "dst",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "目标位置"
+      },
+      "position": [
+        -306.38261519659216,
+        164.89421150153012
+      ]
+    },
+    {
+      "id": "node_1778372466631",
+      "type": "Variant",
+      "properties": {
+        "name": "egg",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "cooldown": {
+              "type": "number"
+            },
+            "time": {
+              "type": "number"
+            },
+            "level": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "cooldown",
+            "time",
+            "level"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "鸡蛋：免费增加小鸡"
+      },
+      "position": [
+        1203.6210850900839,
+        -434.8824202132429
+      ]
+    },
+    {
+      "id": "node_1778372589701",
+      "type": "Event",
+      "properties": {
+        "name": "Egg",
+        "description": "生成小鸡"
+      },
+      "position": [
+        -944.4457067584748,
+        297.30111862022693
+      ]
+    },
+    {
+      "id": "node_1778372644581",
+      "type": "Variant",
+      "properties": {
+        "name": "buy",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "gold": {
+              "type": "integer"
+            },
+            "time": {
+              "type": "number"
+            },
+            "level": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "gold",
+            "time",
+            "level"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "购买小鸡"
+      },
+      "position": [
+        1494.5277980369813,
+        -433.48345297430404
+      ]
+    },
+    {
+      "id": "node_1778372705766",
+      "type": "Variant",
+      "properties": {
+        "name": "heal",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "gold": {
+              "type": "integer"
+            },
+            "increaseGold": {
+              "type": "integer"
+            },
+            "time": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "gold",
+            "increaseGold",
+            "time"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "恢复生命"
+      },
+      "position": [
+        1779.403099614963,
+        -434.4970502829315
+      ]
+    },
+    {
+      "id": "node_1778372799575",
+      "type": "Event",
+      "properties": {
+        "name": "Buy",
+        "description": "购买小鸡"
+      },
+      "position": [
+        -945.4593040671023,
+        448.2790878082777
+      ]
+    },
+    {
+      "id": "node_1778372849339",
+      "type": "Event",
+      "properties": {
+        "name": "Heal",
+        "description": "恢复生命"
+      },
+      "position": [
+        -946.4729013757297,
+        598.0507747225454
+      ]
+    },
+    {
+      "id": "node_1778372908865",
+      "type": "Event",
+      "properties": {
+        "name": "IncreaseHealth",
+        "description": "提高生命"
+      },
+      "position": [
+        -947.9311970510234,
+        733.347074351415
+      ]
+    },
+    {
+      "id": "node_1778372943815",
+      "type": "Event",
+      "properties": {
+        "name": "Toast",
+        "description": "提示"
+      },
+      "position": [
+        -947.2938137192016,
+        874.6747853492004
+      ]
+    },
+    {
+      "id": "node_1778372960618",
+      "type": "Variant",
+      "properties": {
+        "name": "tag",
+        "type": "string",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "info,error,success"
+      },
+      "position": [
+        -626.8018164675647,
+        872.0455608796947
+      ]
+    },
+    {
+      "id": "node_1778372985895",
+      "type": "Variant",
+      "properties": {
+        "name": "message",
+        "type": "string",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "提示消息"
+      },
+      "position": [
+        -335.89510352066725,
+        873.4445281186336
+      ]
+    },
+    {
+      "id": "node_1778373014063",
+      "type": "System",
+      "properties": {
+        "name": "EnemyMoveSystem",
+        "updateEnabled": true,
+        "changeEnabled": false,
+        "spawnEnabled": false,
+        "despawnEnabled": false,
+        "spawnDescription": "",
+        "updateDescription": "根据单位的移动速度调整 pos位置\n当进入攻击区域后，停止移动，并按照攻击数据，发起攻击\n当 attack.radius > 0 时， 进入自爆攻击， 生命不足或到达攻击位置都自曝。"
+      },
+      "position": [
+        -1080.6883899388777,
+        -102.70102413820817
+      ]
+    },
+    {
+      "id": "node_1778373262564",
+      "type": "Variant",
+      "properties": {
+        "name": "pos",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "位置 (World 浮点位置）"
+      },
+      "position": [
+        1176.503506784124,
+        -105.66202388638004
+      ]
+    },
+    {
+      "id": "node_1778373539018",
+      "type": "System",
+      "properties": {
+        "name": "AllyAttackSystem",
+        "updateEnabled": true,
+        "changeEnabled": false,
+        "spawnEnabled": false,
+        "despawnEnabled": false,
+        "spawnDescription": "",
+        "updateDescription": "根据 attack 数据， 发起攻击， 发出子弹"
+      },
+      "position": [
+        -1085.613065567972,
+        -281.5276699444414
+      ]
+    },
+    {
+      "id": "node_1778373700434",
+      "type": "Context",
+      "properties": {
+        "name": "Bullet"
+      },
+      "position": [
+        -618.2327352927878,
+        -4.9723126877281345
+      ]
+    },
+    {
+      "id": "node_1778373786140",
+      "type": "Variant",
+      "properties": {
+        "name": "damage",
+        "type": "integer",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "伤害"
+      },
+      "position": [
+        -298.9904654369531,
+        29.81133796160421
+      ]
+    },
+    {
+      "id": "node_1778373812741",
+      "type": "Variant",
+      "properties": {
+        "name": "pos",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "位置 (World 浮点位置）"
+      },
+      "position": [
+        265.8394031490976,
+        29.984059711046427
+      ]
+    },
+    {
+      "id": "node_1778373828106",
+      "type": "Variant",
+      "properties": {
+        "name": "speed",
+        "type": "float",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "速度"
+      },
+      "position": [
+        -14.078524104148983,
+        29.234211586938443
+      ]
+    },
+    {
+      "id": "node_1778373858893",
+      "type": "Variant",
+      "properties": {
+        "name": "max_count",
+        "type": "float",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "最大伤害次数"
+      },
+      "position": [
+        546.1782033424582,
+        30.10626829708218
+      ]
+    },
+    {
+      "id": "node_1778373898107",
+      "type": "Variant",
+      "properties": {
+        "name": "dst",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "目标位置 (World 浮点位置）"
+      },
+      "position": [
+        839.1387783589906,
+        29.40693333638066
+      ]
+    },
+    {
+      "id": "node_1778373917050",
+      "type": "System",
+      "properties": {
+        "name": "BulletMoveSystem",
+        "updateEnabled": true,
+        "changeEnabled": false,
+        "spawnEnabled": false,
+        "despawnEnabled": false,
+        "spawnDescription": "",
+        "updateDescription": "根据子弹数据， 处理子弹移动。\n根据 radius 处理与Enemy的碰撞， 处理攻击逻辑。"
+      },
+      "position": [
+        -1070.530103321728,
+        32.929783708541834
+      ]
+    },
+    {
+      "id": "node_1778373939409",
+      "type": "Variant",
+      "properties": {
+        "name": "skin",
+        "type": "integer",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "皮肤"
+      },
+      "position": [
+        1125.42680395538,
+        30.994681843463198
+      ]
+    },
+    {
+      "id": "node_1778374094505",
+      "type": "Variant",
+      "properties": {
+        "name": "radius",
+        "type": "float",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "碰撞范围"
+      },
+      "position": [
+        1423.5506673956716,
+        32.04388356739065
+      ]
+    },
+    {
+      "id": "node_1778374148388",
+      "type": "Variant",
+      "properties": {
+        "name": "state",
+        "type": "string",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "状态\nidle\nwalk\nattack"
+      },
+      "position": [
+        1468.5081701884528,
+        -103.95666211827988
+      ]
+    },
+    {
+      "id": "node_1778374234664",
+      "type": "EventSystem",
+      "properties": {
+        "name": "EggEventSystem",
+        "description": "处理鸡蛋生成小鸡逻辑"
+      },
+      "position": [
+        -581.0075929699993,
+        297.47426333055853
+      ]
+    },
+    {
+      "id": "node_1778374261050",
+      "type": "EventSystem",
+      "properties": {
+        "name": "BuyEventSystem",
+        "description": "处理购买小鸡逻辑"
+      },
+      "position": [
+        -593.1741985480114,
+        448.8809105235982
+      ]
+    },
+    {
+      "id": "node_1778374282568",
+      "type": "EventSystem",
+      "properties": {
+        "name": "HealEventSystem",
+        "description": "处理恢复游戏生命值"
+      },
+      "position": [
+        -616.155564639812,
+        600.2875577166377
+      ]
+    },
+    {
+      "id": "node_1778374338919",
+      "type": "EventSystem",
+      "properties": {
+        "name": "IncreaseHealthEventSystem",
+        "description": "处理永久提高生命上限逻辑"
+      },
+      "position": [
+        -636.4332406031656,
+        731.4165289463238
+      ]
+    },
+    {
+      "id": "node_1778374452848",
+      "type": "System",
+      "properties": {
+        "name": "WaveSystem",
+        "updateEnabled": true,
+        "changeEnabled": false,
+        "spawnEnabled": false,
+        "despawnEnabled": false,
+        "updateDescription": "处理第几波敌人生成\n当无敌人时， 根据等待时间后， 生成敌人，注意设计相关的配置信息， 随着波提升难度提升"
+      },
+      "position": [
+        -1082.5421117969427,
+        -429.81838122172104
+      ]
+    },
+    {
+      "id": "node_1778374715458",
+      "type": "System",
+      "properties": {
+        "name": "StarupSystem",
+        "updateEnabled": false,
+        "changeEnabled": false,
+        "spawnEnabled": true,
+        "despawnEnabled": false,
+        "updateDescription": "",
+        "spawnDescription": "初始化 Game 对象，单例， 注意配置的设计。"
+      },
+      "position": [
+        -819.4876762000539,
+        -583.1322254056913
+      ]
+    },
+    {
+      "id": "node_1778374801580",
+      "type": "Event",
+      "properties": {
+        "name": "Pause",
+        "description": "暂停游戏"
+      },
+      "position": [
+        -951.4131405672571,
+        1047.072351442527
+      ]
+    },
+    {
+      "id": "node_1778374827202",
+      "type": "Variant",
+      "properties": {
+        "name": "state",
+        "type": "string",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "游戏状态\nnone\nrunning\npaused\nfailed\nsuccess\n"
+      },
+      "position": [
+        2347.0888161382486,
+        -432.5220713501682
+      ]
+    },
+    {
+      "id": "node_1778374867036",
+      "type": "Event",
+      "properties": {
+        "name": "Resume",
+        "description": "游戏失败后重新开始"
+      },
+      "position": [
+        -949.264802365517,
+        1169.5349003601646
+      ]
+    },
+    {
+      "id": "node_1778374880586",
+      "type": "EventSystem",
+      "properties": {
+        "name": "PauseEventSystem",
+        "description": "处理暂停游戏"
+      },
+      "position": [
+        -620.2110998324828,
+        1049.155654231533
+      ]
+    },
+    {
+      "id": "node_1778374901633",
+      "type": "EventSystem",
+      "properties": {
+        "name": "ResumeEventSystem",
+        "description": "处理恢复继续游戏"
+      },
+      "position": [
+        -612.2110998324828,
+        1173.155654231533
+      ]
+    },
+    {
+      "id": "node_1778380899547",
+      "type": "Event",
+      "properties": {
+        "name": "Reset"
+      },
+      "position": [
+        -947.0333623224054,
+        1297.4940038180673
+      ]
+    },
+    {
+      "id": "node_1778380914062",
+      "type": "EventSystem",
+      "properties": {
+        "name": "ResetEventSystem",
+        "description": "游戏失败后重新开始， 清理所有怪物， 生命恢复50%（可配置）\n等待wave 时间后，重新生成当前 wave enemy"
+      },
+      "position": [
+        -612.8503406463034,
+        1295.0439816650166
+      ]
+    },
+    {
+      "id": "node_1778381814008",
+      "type": "EventSystem",
+      "properties": {
+        "name": "MergeEventSystem",
+        "description": "合并小鸡\n当目标位置空时，移动小鸡到空位置\n当目标位置小鸡，与移动的小鸡等级不同，则交换两个小鸡位置\n当目标位置小鸡，与移动的小鸡等级相同， 则目标位置小鸡升级， 移动的小鸡移除"
+      },
+      "position": [
+        -3.5066218398058027,
+        166.11535746252787
+      ]
+    },
+    {
+      "id": "node_1778382710559",
+      "type": "System",
+      "properties": {
+        "name": "AllyGoldSystem",
+        "updateEnabled": true,
+        "changeEnabled": false,
+        "spawnEnabled": false,
+        "despawnEnabled": false,
+        "updateDescription": "小鸡定时奖励金币，小鸡等级越高，金币越多 ，注意配置设计"
+      },
+      "position": [
+        -1473.8351487539853,
+        -279.28327567412157
+      ]
+    },
+    {
+      "id": "node_1778562718720",
+      "type": "View",
+      "properties": {
+        "name": "gold",
+        "description": "显示金币",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if (value > 1000) {\n  return (value * 0.001).toFixed(2) + 'K'\n}\nreturn String(value)"
+      },
+      "position": [
+        895.9488774767508,
+        319.42170619267586
+      ]
+    },
+    {
+      "id": "node_1778567672932",
+      "type": "View",
+      "properties": {
+        "name": "level",
+        "description": "当前小鸡等级",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "return String(value.level)"
+      },
+      "position": [
+        897.9763227464184,
+        440.3197575746881
+      ]
+    },
+    {
+      "id": "node_1778567715266",
+      "type": "View",
+      "properties": {
+        "name": "waveTitle",
+        "description": "第几波",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if (object.wave.state === 'running') {\n  return  `第${object.wave.value}波`\n}\nreturn  `第${object.wave.value}波(${Math.floor(object.wave.start_time-object.time)}s)`"
+      },
+      "position": [
+        862.8377021289796,
+        570.665790824345
+      ]
+    },
+    {
+      "id": "node_1778567808603",
+      "type": "View",
+      "properties": {
+        "name": "waveProgressText",
+        "description": "第几波进度",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "return `${value.max_count-value.count}/${value.max_count}`"
+      },
+      "position": [
+        897.078271364406,
+        677.1629184173651
+      ]
+    },
+    {
+      "id": "node_1778567944158",
+      "type": "View",
+      "properties": {
+        "name": "buyGold",
+        "description": "购买小鸡需要的金币",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if(value.gold>1000) {\n  return (value.gold * 0.001).toFixed(2) +'K'\n}\nreturn String(value.gold)"
+      },
+      "position": [
+        904.0586585554215,
+        788.155085956682
+      ]
+    },
+    {
+      "id": "node_1778568021145",
+      "type": "View",
+      "properties": {
+        "name": "eggSeconds",
+        "description": "鸡蛋孵化秒数",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if(object.time<object.egg.time+object.egg.cooldown) {\n  return Math.ceil(object.egg.time+object.egg.cooldown-object.time) +'s'\n}\nreturn ''"
+      },
+      "position": [
+        881.3213942183506,
+        925.5629437431868
+      ]
+    },
+    {
+      "id": "node_1778569151314",
+      "type": "View",
+      "properties": {
+        "name": "eggEnabled",
+        "description": "鸡蛋孵化可用",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if(object.time<object.egg.time+object.egg.cooldown) {\n  return 'disabled'\n}\nreturn 'enabled'"
+      },
+      "position": [
+        858.5841298812804,
+        1054.7158983274453
+      ]
+    },
+    {
+      "id": "node_1778571119840",
+      "type": "View",
+      "properties": {
+        "name": "healthProgress",
+        "description": "当前生命进度",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "\nreturn value.value/value.max"
+      },
+      "position": [
+        859.1797193141256,
+        1189.9432238647362
+      ]
+    },
+    {
+      "id": "node_1778571226153",
+      "type": "View",
+      "properties": {
+        "name": "healGold",
+        "description": "恢复生命需要的金币",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if(value.gold >1000){\n  return (value.gold * 0.001).toFixed(2)+'K'\n}\nreturn String(value.gold)"
+      },
+      "position": [
+        858.1334583066728,
+        1310.393895439344
+      ]
+    },
+    {
+      "id": "node_1778571689871",
+      "type": "View",
+      "properties": {
+        "name": "increaseGold",
+        "description": "提高生命上限需要的金币",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if(value.increaseGold >1000){\n  return (value.increaseGold * 0.001).toFixed(2)+'K'\n}\nreturn String(value.increaseGold)"
+      },
+      "position": [
+        868.580150381307,
+        1427.5608661333554
+      ]
+    },
+    {
+      "id": "node_1778571872770",
+      "type": "View",
+      "properties": {
+        "name": "waveProgress",
+        "description": "第几波进度",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "return (value.max_count-value.count)/value.max_count"
+      },
+      "position": [
+        1192.9802706340367,
+        679.1903636870328
+      ]
+    },
+    {
+      "id": "node_1778574736482",
+      "type": "View",
+      "properties": {
+        "name": "healthProgressText",
+        "description": "当前生命进度文本",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "\nreturn `${value.value}/${value.max}`"
+      },
+      "position": [
+        1149.203153920157,
+        1190.9610754584194
+      ]
+    },
+    {
+      "id": "node_1778637934595",
+      "type": "Variant",
+      "properties": {
+        "name": "Claim",
+        "type": "JSONSchema",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "available_gold": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "当前可领取的金币数量"
+            },
+            "claimed_gold": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "累计已领取的金币数量"
+            },
+            "last_claim_time": {
+              "type": "number",
+              "minimum": 0,
+              "description": "最后一次领取时间戳（秒）"
+            },
+            "last_claim_multiplier": {
+              "type": "number",
+              "minimum": 0,
+              "description": "最后一次领取使用的倍数"
+            }
+          },
+          "required": [
+            "available_gold",
+            "claimed_gold",
+            "last_claim_time",
+            "last_claim_multiplier"
+          ],
+          "additionalProperties": false
+        },
+        "required": true,
+        "description": "领取奖励状态：可领取金币、累计已领取金币、最后领取时间、最后领取倍数"
+      },
+      "position": [
+        2642.7349890570395,
+        -435.26161003122337
+      ]
+    },
+    {
+      "id": "node_1778641612020",
+      "type": "View",
+      "properties": {
+        "name": "claimGold",
+        "description": "通过可领取的金币",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "if(value.available_gold >1000){\n  return (value.available_gold * 0.001).toFixed(2)+'K'\n}\nreturn String(value.available_gold)"
+      },
+      "position": [
+        876.0000863087935,
+        1531.7694962647158
+      ]
+    },
+    {
+      "id": "node_1778642194817",
+      "type": "Event",
+      "properties": {
+        "name": "Claim",
+        "description": "领取通关奖励⌚️"
+      },
+      "position": [
+        -944.2156978073024,
+        1438.4174858485019
+      ]
+    },
+    {
+      "id": "node_1778642223355",
+      "type": "EventSystem",
+      "properties": {
+        "name": "ClaimSystem",
+        "description": "处理领取奖励逻辑"
+      },
+      "position": [
+        -260.25844577398465,
+        1442.1766781070326
+      ]
+    },
+    {
+      "id": "node_1778642234545",
+      "type": "Variant",
+      "properties": {
+        "name": "scale",
+        "type": "float",
+        "jsonSchema": "{}",
+        "required": true,
+        "description": "领取奖励的倍数"
+      },
+      "position": [
+        -600.9665156999063,
+        1439.6806072844222
+      ]
+    },
+    {
+      "id": "node_1778643240255",
+      "type": "View",
+      "properties": {
+        "name": "waveCount",
+        "description": "第几波击杀数",
+        "valueExpression": "{value>1000?(value * 0.001).toFixed(2):value.toString()}",
+        "valueScriptCode": "return value.max_count-value.count"
+      },
+      "position": [
+        1510.748590274244,
+        679.9805829324682
+      ]
+    },
+    {
+      "id": "node_ally_gold_20260513",
+      "type": "Variant",
+      "properties": {
+        "name": "gold",
+        "type": "JSONSchema",
+        "required": true,
+        "description": "小鸡金币奖励记录：每次奖励、累计奖励、上次奖励时间、下次奖励时间",
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "reward_gold": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "本次（最近一次）奖励金币"
+            },
+            "total_gold": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "该 Ally 累计奖励金币"
+            },
+            "last_reward_time": {
+              "type": "number",
+              "minimum": 0,
+              "description": "上次奖励时间戳（秒）"
+            },
+            "next_reward_time": {
+              "type": "number",
+              "minimum": 0,
+              "description": "下次奖励时间戳（秒）"
+            }
+          },
+          "required": [
+            "reward_gold",
+            "total_gold",
+            "last_reward_time",
+            "next_reward_time"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "position": [
+        932.3189815787341,
+        -277.70611899350615
+      ]
+    }
+  ],
+  "edges": [
+    [
+      "node_1778369587486",
+      "node_1778369647035"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778369682922"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778369713756"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778369802238"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778369839154"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778370542979"
+    ],
+    [
+      "node_1778369839154",
+      "node_1778370582463"
+    ],
+    [
+      "node_1778369839154",
+      "node_1778370622039"
+    ],
+    [
+      "node_1778369839154",
+      "node_1778371068693"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778371089065"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778371098676"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778371151233"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778371185185"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778371595975"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778372235976"
+    ],
+    [
+      "node_1778369839154",
+      "node_1778372274661"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778372322808"
+    ],
+    [
+      "node_1778372322808",
+      "node_1778372362683"
+    ],
+    [
+      "node_1778372322808",
+      "node_1778372394431"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778372466631"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778372644581"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778372705766"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778370843161"
+    ],
+    [
+      "node_1778372943815",
+      "node_1778372960618"
+    ],
+    [
+      "node_1778372943815",
+      "node_1778372985895"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778373014063"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778373262564"
+    ],
+    [
+      "node_1778369839154",
+      "node_1778373539018"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778373786140"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778373812741"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778373828106"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778373858893"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778373898107"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778373917050"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778373939409"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778373700434"
+    ],
+    [
+      "node_1778373700434",
+      "node_1778374094505"
+    ],
+    [
+      "node_1778370542979",
+      "node_1778374148388"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778372589701"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778372799575"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778372849339"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778372908865"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778372943815"
+    ],
+    [
+      "node_1778372589701",
+      "node_1778374234664"
+    ],
+    [
+      "node_1778372799575",
+      "node_1778374261050"
+    ],
+    [
+      "node_1778372849339",
+      "node_1778374282568"
+    ],
+    [
+      "node_1778372908865",
+      "node_1778374338919"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778374452848"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778374715458"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778374827202"
+    ],
+    [
+      "node_1778374801580",
+      "node_1778374880586"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778374801580"
+    ],
+    [
+      "node_1778374867036",
+      "node_1778374901633"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778374867036"
+    ],
+    [
+      "node_1778380899547",
+      "node_1778380914062"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778380899547"
+    ],
+    [
+      "node_1778372322808",
+      "node_1778381814008"
+    ],
+    [
+      "node_1778369839154",
+      "node_1778382710559"
+    ],
+    [
+      "node_1778369713756",
+      "node_1778562718720"
+    ],
+    [
+      "node_1778372644581",
+      "node_1778567672932"
+    ],
+    [
+      "node_1778369802238",
+      "node_1778567808603"
+    ],
+    [
+      "node_1778372644581",
+      "node_1778567944158"
+    ],
+    [
+      "node_1778369682922",
+      "node_1778568021145"
+    ],
+    [
+      "node_1778369682922",
+      "node_1778569151314"
+    ],
+    [
+      "node_1778369682922",
+      "node_1778567715266"
+    ],
+    [
+      "node_1778370843161",
+      "node_1778571119840"
+    ],
+    [
+      "node_1778372705766",
+      "node_1778571226153"
+    ],
+    [
+      "node_1778372705766",
+      "node_1778571689871"
+    ],
+    [
+      "node_1778369802238",
+      "node_1778571872770"
+    ],
+    [
+      "node_1778370843161",
+      "node_1778574736482"
+    ],
+    [
+      "node_1778369647035",
+      "node_1778637934595"
+    ],
+    [
+      "node_1778637934595",
+      "node_1778641612020"
+    ],
+    [
+      "node_1778369587486",
+      "node_1778642194817"
+    ],
+    [
+      "node_1778642194817",
+      "node_1778642223355"
+    ],
+    [
+      "node_1778642194817",
+      "node_1778642234545"
+    ],
+    [
+      "node_1778369802238",
+      "node_1778643240255"
+    ],
+    [
+      "node_1778369839154",
+      "node_ally_gold_20260513"
+    ]
+  ]
+}

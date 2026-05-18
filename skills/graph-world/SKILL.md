@@ -450,6 +450,69 @@ Completion check:
 - "Build an e-commerce world model with catalog/order/payment contexts and event-driven order creation."
 - "Create a smart-home app model with device contexts, lifecycle systems, and device-connected event handling."
 
+## Reference Example
+
+`skills/graph-world/World.graph.json` is a complete, real-world graph for a **Merge Chicken** tower-defense game. Use it as a concrete reference when designing new worlds.
+
+### Structure Overview
+
+```
+World
+└── Game (Context)          — shared game data
+    ├── time (float)        — game time (seconds)
+    ├── gold (integer)      — gold coins
+    ├── wave (JSONSchema)   — current enemy wave {value, state, start_time}
+    ├── egg (JSONSchema)    — egg cooldown config {time, cooldown, ...}
+    ├── buy (JSONSchema)    — buy-chicken config {gold, increaseGold, ...}
+    ├── heal (JSONSchema)   — heal config {gold, value}
+    ├── health (JSONSchema) — global game health {value, max}
+    ├── grid (JSONSchema)   — map grid {cols, rows, cell_size}
+    ├── reward (JSONSchema) — claim-reward state
+    ├── status (string)     — game status: none/running/paused/failed/success
+    ├── Ally (Context)      — allied units (chickens)
+    │   ├── level (integer)
+    │   ├── attack (JSONSchema)  — {damage, speed, radius}
+    │   ├── skin (string)
+    │   ├── pos (JSONSchema)     — grid integer position {x, y}
+    │   ├── ally_gold (Variant)  — chicken gold-production config
+    │   ├── AllyAttackSystem     — launch attacks and shoot bullets based on attack data
+    │   └── AllyGoldSystem       — periodically reward gold; higher level yields more gold
+    ├── Enemy (Context)     — enemy units (dogs)
+    │   ├── level, attack, health, move (JSONSchema)
+    │   ├── skin (string), state (string: idle/walk/attack)
+    │   ├── pos (JSONSchema)     — world float position {x, y}
+    │   └── EnemyMoveSystem      — movement + attack-range check + self-destruct logic
+    ├── Bullet (Context)    — bullets
+    │   ├── damage, speed, max_count, radius (float/integer)
+    │   ├── pos, dst (JSONSchema) — world float position
+    │   ├── skin (integer)
+    │   └── BulletMoveSystem     — bullet movement + enemy collision + attack logic
+    ├── WaveSystem               — enemy wave spawn scheduling
+    └── GameSystem               — initialize Game singleton, config-driven
+
+Events (under World):
+  Merge            → MergeEventSystem           — move / swap / merge chickens
+  Egg              → EggEventSystem             — spawn chicken (free)
+  Buy              → BuyEventSystem             — buy chicken (costs gold)
+  Heal             → HealEventSystem            — restore game health
+  IncreaseHealth   → IncreaseHealthEventSystem  — permanently increase max health
+  Toast            → (tag, message)             — notification message
+  Pause            → PauseEventSystem           — pause game
+  Resume           → ResumeEventSystem          — resume game
+  Reset            → ResetEventSystem           — restart after defeat (clear enemies + restore 50% health)
+  ClaimReward      → ClaimRewardEventSystem     — claim stage-clear reward (multiplier supported)
+```
+
+### Key Design Patterns in This Example
+
+1. **JSONSchema for structured data**: Use `JSONSchema` Variant type when a field groups related sub-fields (e.g., `attack = {damage, speed, radius}`). Use primitive types (`float`, `integer`, `string`) for scalar values.
+2. **Config-driven Systems**: `GameSystem` initializes a singleton Game context and reads all configurable parameters (costs, cooldowns, scaling) from Variant fields, never hard-coding values.
+3. **Singleton Context access**: Systems and EventSystems always fetch the Game context by fixed id (`getGameById('id')`), not by positional child lookup.
+4. **Event payload minimalism**: Events like `Merge` carry only the minimum required payload (`ally_id`, `dst`). The handler derives remaining state from Context.
+5. **Ephemeral state in System cache**: Frame-local working sets (bullet-enemy collision candidates, move targets per frame) live in System closure scope, not as graph Variants.
+6. **Wave difficulty scaling**: `WaveSystem` reads `wave.value` to scale enemy count and stats — all scaling parameters are configurable Variants, not embedded constants.
+7. **Reset flow**: `ResetEventSystem` handles `Reset` event by despawning all Enemy and Bullet contexts, restoring health by a configurable percentage, and re-triggering wave spawn after a wait period.
+
 ## Execution Notes
 
 - Prefer atomic mutation batches with `apply_graph_transaction`.
