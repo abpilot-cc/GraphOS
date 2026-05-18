@@ -356,6 +356,7 @@ Registration guidance:
 - Keep imported symbol names aligned with the generated PascalCase file names and graph node names.
 - Use the owning Context table when calling `app.addSystem(...)`.
 - Use the exact graph `Event` name when calling `app.addEventSystem(...)`.
+- Keep the `src/app.ts` default export signature fixed as `export default function (app: App): WorldContext`; this format is mandatory and must not be changed.
 
 ### Step 4: Closed-Loop Validation and Completion
 

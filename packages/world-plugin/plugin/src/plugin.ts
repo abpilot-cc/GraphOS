@@ -502,6 +502,8 @@ export default function install(app: IApp, env: any) {
             const tmpDistPath = path.join(runTmpRoot, "dist");
 
             try {
+                fs.cpSync(path.join(env.workDir, "package.json"), path.join(runTmpRoot, "package.json"));
+                fs.cpSync(path.join(env.workDir, "node_modules"), path.join(runTmpRoot, "node_modules"), { recursive: true });
                 fs.cpSync(sourceDistPath, tmpDistPath, { recursive: true });
                 loadedTmpDir = runTmpRoot;
             } catch (e) {
@@ -514,9 +516,16 @@ export default function install(app: IApp, env: any) {
                 (async () => {
                     try {
                         const url = pathToFileURL(entryPath).href;
-                        const e = await import(url);
-                        const fn: (app: App) => IEventSource<IObject> = e.default;
-                        worldContext = fn(app);
+                        let e: any = await import(url);
+                        let fn: (app: App) => IEventSource<IObject>;
+                        while (e.default) {
+                            e = e.default;
+                            if (typeof e === "function") {
+                                fn = e;
+                                break;
+                            }
+                        }
+                        worldContext = fn!(app);
                         socketLike.worldContext = worldContext;
                     }
                     catch (e) {
