@@ -54,8 +54,8 @@ import { IEventSource, IEvent, GetEvent, SetEvent, AddEvent, DelEvent, IContext,
 
 export class ContextBase<TObject extends IObject, TParent, TContext extends IContext> {
     constructor(
-      public readonly ctx: TContext,
-      public readonly cache: ICache,
+      protected readonly ctx: TContext,
+      protected readonly cache: ICache,
       public readonly object: TObject,
       public readonly parent: TParent
     ) {}
