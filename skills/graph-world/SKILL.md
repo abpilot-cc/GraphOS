@@ -62,6 +62,10 @@ npm i -D graphos-world-plugin graphos-cli
             "enabled": true,
             "outDir": "gen"
          },
+         "genWebTypeScript": {
+            "enabled": true,
+            "outDir": "app"
+         },
          "genCocosCreator": {
             "enabled": false,
             "outDir": "../cocos/assets/gen"
