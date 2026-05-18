@@ -82,12 +82,12 @@ npm i -D graphos-world-plugin graphos-cli
    "scripts": {
       "graphos": "graphos",
       "build": "tsc",
-      "test:logic": "tsc -p tsconfig.json && node dist/test.js"
+      "test:logic": "tsc -p tsconfig.world.json && node dist/test.js"
    }
 }
 ```
 
-5. Ensure root `tsconfig.json` exists (minimal example):
+5. Ensure root `tsconfig.world.json` exists (minimal example):
 
 ```json
 {
@@ -102,7 +102,7 @@ npm i -D graphos-world-plugin graphos-cli
       "outDir": "dist",
       "rootDir": "src"
    },
-   "include": ["src/**/*.ts","gen/**/*.ts","app/**/*.ts"],
+   "include": ["src/**/*.ts","gen/**/*.ts"],
    "exclude": ["node_modules", "dist"]
 }
 ```
@@ -152,7 +152,7 @@ Suggested `package.json` scripts for the harness:
 ```json
 {
    "scripts": {
-      "test:logic": "tsc -p tsconfig.json && node dist/test.js"
+      "test:logic": "tsc -p tsconfig.world.json && node dist/test.js"
    }
 }
 ```
@@ -172,8 +172,8 @@ Recommended `src/test.ts` initialization example:
 
 ```ts
 import { App, MemStorage } from 'graphos-world-plugin';
-import { WorldContext } from '../gen/World';
-import createWorldContext from './app';
+import { WorldContext } from '../gen/World.js';
+import createWorldContext from './app.js';
 
 let _app: App = new App(new MemStorage());
 let _world: WorldContext = createWorldContext(_app);
@@ -331,7 +331,7 @@ TypeScript example (`System.spawn` for baseline initialization):
 
 ```ts
 import type { ISystem } from 'graphos-world-plugin';
-import { WorldContext } from '../gen/World';
+import { WorldContext } from '../gen/World.js';
 
 export function createWorldBootstrapSystem(): ISystem<WorldContext> {
    return {
@@ -347,7 +347,7 @@ TypeScript example (startup `EventSystem` for triggered initialization):
 
 ```ts
 import type { ISystem } from 'graphos-world-plugin';
-import type { WorldContext, IWorldStartupRequestedEvent } from '../gen/World';
+import type { WorldContext, IWorldStartupRequestedEvent } from '../gen/World.js';
 
 export type InitWorldContextsOnStartupEventSystem = ISystem<WorldContext, IWorldStartupRequestedEvent>;
 
@@ -426,9 +426,9 @@ Application registration example (`src/app.ts`):
 
 ```ts
 import { App } from 'graphos-world-plugin';
-import { MatchLoopContext, WorldContext } from '../gen/World';
-import { createMatchLifecycleSystem } from './MatchLifecycleSystem';
-import { createApplyConfigHotReloadEventSystem } from './ApplyConfigHotReloadEventSystem';
+import { MatchLoopContext, WorldContext } from '../gen/World.js';
+import { createMatchLifecycleSystem } from './MatchLifecycleSystem.js';
+import { createApplyConfigHotReloadEventSystem } from './ApplyConfigHotReloadEventSystem.js';
 
 export default function (app: App): WorldContext {
    app.addSystem(MatchLoopContext.Table, createMatchLifecycleSystem());
