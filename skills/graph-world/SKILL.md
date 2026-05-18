@@ -33,6 +33,7 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 1. Load and use `graph-management` skill first.
 2. Read available node types and current graph state before mutation.
 3. Use one coherent transaction per design step when possible.
+4. Enforce root naming constraint: the `World` node `name` is fixed to `'World'`.
 
 ## Project Bootstrap (npm + TypeScript)
 
@@ -45,10 +46,10 @@ npm init -y
 npm i -D typescript @types/node
 ```
 
-2. Install `graphos-world-plugin` as dev dependency:
+2. Install `graphos-world-plugin` and `graphos-cli` as dev dependencies:
 
 ```bash
-npm i -D graphos-world-plugin
+npm i -D graphos-world-plugin graphos-cli
 ```
 
 3. Ensure `package.json` contains the following `graphos` config:
@@ -75,15 +76,81 @@ npm i -D graphos-world-plugin
 ```json
 {
    "scripts": {
-      "graphos": "graphos"
+      "graphos": "graphos",
+      "build": "tsc",
+      "test:logic": "tsc -p tsconfig.json && node dist/test.js"
    }
 }
 ```
 
-5. Optional verification:
+5. Ensure root `tsconfig.json` exists (minimal example):
+
+```json
+{
+   "compilerOptions": {
+      "target": "ES2020",
+      "module": "NodeNext",
+      "moduleResolution": "NodeNext",
+      "strict": true,
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "skipLibCheck": true,
+      "outDir": "dist",
+      "rootDir": "src"
+   },
+   "include": ["src/**/*.ts","gen/**/*.ts","app/**/*.ts"],
+   "exclude": ["node_modules", "dist"]
+}
+```
+
+6. Optional verification:
 
 ```bash
 npm run graphos -- --help
+npm run build
+npm run test:logic
+```
+
+## Logic Layer Test Harness (`src/test.ts`)
+
+Use this when you need to verify the logic layer in a headless, deterministic way without the UI.
+
+1. Create `src/test.ts` as the simulation entry point for logic validation.
+   - Load the generated world/runtime types and register the same `System` / `EventSystem` wiring used by the app.
+   - Run the logic layer against scripted scenarios that represent the main gameplay or business branches.
+   - Keep the harness independent from rendering, DOM, canvas, and presentation-layer code.
+2. Print detailed logs for every scenario and branch.
+   - Log scenario name, input payloads, target Context scopes, and the exact branch being exercised.
+   - Log before/after snapshots for relevant Context and Variant data so failures can be traced quickly.
+   - Log every Event dispatch, System transition, cache decision, and assertion result.
+   - Prefer structured output that is easy to diff, such as JSON payloads plus concise human-readable summaries.
+3. Validate closure with automated assertions.
+   - Assert that each scenario reaches the expected end state.
+   - Assert that each critical logic branch is executed at least once across the scenario matrix.
+   - Assert that no required Event, System, Context, or Variant path remains unvisited for the intended design.
+4. Repeat testing until all game or app branches pass.
+   - If a branch fails, inspect the logs, patch the graph or runtime logic, and rerun the harness.
+   - Continue the scenario matrix until the logic layer is closed-loop and all intended flows pass consistently.
+
+Suggested `package.json` scripts for the harness:
+
+```json
+{
+   "scripts": {
+      "test:logic": "tsc -p tsconfig.json && node dist/test.js"
+   }
+}
+```
+
+Suggested `src/test.ts` responsibilities:
+
+```ts
+// 1. bootstrap app/runtime
+// 2. register generated systems and event systems
+// 3. execute scenario matrix
+// 4. print detailed logs for each step
+// 5. assert expected branch coverage and final state
+// 6. exit non-zero on failure
 ```
 
 ## Modification Rules (Mandatory Order)
@@ -113,6 +180,7 @@ These rules are hard constraints for any change workflow:
 
 Completion check:
 - You know whether a World node already exists.
+- You confirmed the World root node `name` is exactly `'World'`.
 - You know where new Context/Variant/System/Event nodes should be attached.
 
 ### Step 1: Build Data Model and Variants
@@ -368,7 +436,7 @@ Completion check:
 
 ## Quality Gates (Final Review)
 
-1. Structure gate: exactly one World root and coherent Context tree.
+1. Structure gate: exactly one World root, its `name` is exactly `'World'`, and the Context tree is coherent.
 2. Type gate: Variants are typed correctly; JSONSchema nodes contain valid schema text.
 3. Ownership gate: Systems and Variants are attached to the scope that owns their data.
 4. Event gate: Event/EventSystem pairs cover bootstrap and key domain triggers.
