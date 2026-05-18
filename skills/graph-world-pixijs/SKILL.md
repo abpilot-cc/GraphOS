@@ -58,6 +58,53 @@ import type { SomeObjectType } from './World';
 1. Only read object state from `client.objects()` inside the render loop; do not cache stale snapshots across frames unless intentionally diffing.
 2. Never call logic-layer APIs to mutate state from the presentation layer — mutation is the logic layer's responsibility.
 3. If `client.objects()` does not expose a field you need, request the logic-layer change through graph-world first.
+4. Default to immediate-mode rendering for dynamic geometry: in each frame, clear PixiJS `Graphics` and redraw based on current logic object state and object-to-object relationships.
+5. If per-object rendering resources are needed (for example sprite, graphics wrapper, text, animation handles), store them in `WeakMap<IObject, ResourceHandle>` keyed by the logic object reference.
+
+### Lifecycle Events via Client
+
+If presentation needs object lifecycle hooks (create/update/destroy), listen to `Client` events instead of introducing logic-layer coupling.
+
+Available event classes from `graphos-world-client`:
+
+```typescript
+export declare class SpawnEvent extends Event {
+    readonly object: IObject;
+    constructor(object: IObject);
+}
+export declare class DespawnEvent extends Event {
+    readonly object: IObject;
+    constructor(object: IObject);
+}
+export declare class ChangeEvent extends Event {
+    readonly object: IObject;
+    readonly changes: Partial<IObject>;
+    constructor(object: IObject, changes: Partial<IObject>);
+}
+```
+
+Runtime event names are `spawn`, `despawn`, and `change`:
+
+```typescript
+import { Client, SpawnEvent, DespawnEvent, ChangeEvent } from 'graphos-world-client';
+
+const client = new Client();
+
+client.addEventListener('spawn', (event) => {
+    const e = event as SpawnEvent;
+    // Initialize presentation resources for e.object if needed
+});
+
+client.addEventListener('change', (event) => {
+    const e = event as ChangeEvent;
+    // React to changed fields in e.changes
+});
+
+client.addEventListener('despawn', (event) => {
+    const e = event as DespawnEvent;
+    // Cleanup resources associated with e.object
+});
+```
 
 ## Directory and Output Constraints
 
@@ -123,6 +170,9 @@ Implementation requirements:
 - Keep frame-update cost controlled and avoid creating repeated objects every frame.
 - Add minimal and focused comments only on critical rendering paths.
 - Use TypeScript types from `app/World.ts` for all object state fields accessed in rendering.
+- For relationship-heavy dynamic visuals, prefer a `Graphics.clear()` + redraw flow per frame (immediate mode) over long-lived retained geometry.
+- For retained PixiJS resources, associate objects and resources with `WeakMap` so resources follow object lifecycle without manual ownership coupling.
+- If lifecycle-level initialization or disposal is required, subscribe to `spawn` / `change` / `despawn` events from `Client`.
 
 Completion checks:
 - Core presentation requirements run from ./app/.
@@ -158,6 +208,9 @@ Completion checks:
 - Correct paths: source in ./app/ and build output in ./dist/app/.
 - Client-only access: all logic-layer state is read through `graphos-world-client`; no direct imports from logic-layer source folders.
 - Type safety: object types from `app/World.ts` (auto-generated) are used throughout presentation code; `app/World.ts` is never modified.
+- Rendering rule: immediate-mode redraw paths use PixiJS `Graphics` clear-and-redraw based on current object state and relationships.
+- Resource binding: object-scoped rendering resources may use `WeakMap<IObject, ...>` and are cleaned up on despawn.
+- Lifecycle hooks: lifecycle-sensitive presentation behavior listens to `Client` events (`spawn`, `change`, `despawn`) with `SpawnEvent` / `ChangeEvent` / `DespawnEvent` typing.
 - Contract alignment: naming and semantics are consistent with graph-world Context, Variant, and Event.
 - Maintainability: clear modules, explicit typing, readable critical render paths.
 - Verifiability: at least one successful build and key integration flow validation.
@@ -166,6 +219,8 @@ Completion checks:
 
 - Build fails: inspect TypeScript and asset paths in ./app/ first, then minimal build config.
 - `client.objects()` returns unexpected or missing fields: stop presentation patching, identify the missing contract, and hand off to graph-world to expose the field.
+- Immediate-mode redraw performance degrades: keep immediate mode for dynamic links/relations, but move static layers to retained containers and profile draw-call hotspots.
+- Lifecycle mismatch (missing init/cleanup timing): verify `spawn` / `change` / `despawn` event wiring on `Client` before adding workaround state in presentation.
 - Type mismatch on `app/World.ts` types: re-read `app/World.ts` (do not edit it); adjust presentation code to match the generated types.
 - Integration fails due to logic gap: immediately route back to decision step and hand off to graph-world.
 - Requirement out of scope: split out-of-scope logic items into graph-world follow-up tasks, and deliver only feasible presentation work here.
