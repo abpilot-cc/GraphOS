@@ -7,6 +7,7 @@ import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
 import { App, MemStorage, type AddEvent, type DelEvent, type GetEvent, type IEvent, type IEventSource, type IObject, type SetEvent } from "./index.js";
 import { genCocosCreator } from "./genCocosCreator.js";
+import { genWebTypeScript } from "./genWebTypeScript.js";
 
 type AppRecord = {
     time: number;
@@ -396,6 +397,19 @@ export default function install(app: IApp, env: any) {
                 }
             } catch (err: any) {
                 console.error("Error generating Cocos Creator code for World:", err.stack || err);
+            }
+        }
+
+        if (env && env.world && env.world.genWebTypeScript && env.world.genWebTypeScript.enabled) {
+            const gen = path.join(env.workDir, env.world.genWebTypeScript.outDir || "gen");
+            try {
+                const codeFiles = genWebTypeScript(event.data);
+                fs.mkdirSync(gen, { recursive: true });
+                for (let file of codeFiles) {
+                    fs.writeFileSync(path.join(gen, file.name), file.content, "utf-8");
+                }
+            } catch (err: any) {
+                console.error("Error generating Web TypeScript code for World:", err.stack || err);
             }
         }
     });
