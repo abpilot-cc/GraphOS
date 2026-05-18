@@ -168,6 +168,19 @@ Suggested `src/test.ts` responsibilities:
 // 6. exit non-zero on failure
 ```
 
+Recommended `src/test.ts` initialization example:
+
+```ts
+import { App, MemStorage } from 'graphos-world-plugin';
+import { WorldContext } from '../gen/World';
+import createWorldContext from './app';
+
+let _app: App = new App(new MemStorage());
+let _world: WorldContext = createWorldContext(_app);
+
+// TODO test case for world context
+```
+
 ## Modification Rules (Mandatory Order)
 
 These rules are hard constraints for any change workflow:
