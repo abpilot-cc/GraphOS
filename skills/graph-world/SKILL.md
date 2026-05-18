@@ -107,7 +107,18 @@ npm i -D graphos-world-plugin graphos-cli
 }
 ```
 
-6. Optional verification:
+6. Create `World.graph.json` in the project root as the initial empty graph:
+
+```json
+{
+  "id": "main",
+  "name": "World",
+  "nodes": [],
+  "edges": []
+}
+```
+
+7. Optional verification:
 
 ```bash
 npm run graphos -- --help
