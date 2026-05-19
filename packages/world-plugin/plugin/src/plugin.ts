@@ -445,8 +445,7 @@ export default function install(app: IApp, env: any) {
         let fps: number = 30;
         let isPaused: boolean = false;
         let records: AppRecord[] = [];
-        let loadedTmpDir: string | undefined;
-
+        
         const emitState = () => {
             emit("world-state", { duration: duration, current: current, state: app ? isPaused ? 'paused' : 'running' : 'stopped', scale: scale, fps: fps });
         };
@@ -503,29 +502,7 @@ export default function install(app: IApp, env: any) {
             socketLike.app = app;
             onInit();
             const sourceDistPath = path.join(env.workDir, "dist");
-            if (loadedTmpDir) {
-                try {
-                    fs.rmSync(loadedTmpDir, { recursive: true, force: true });
-                } catch (e) {
-                    console.warn(`Failed to remove previous temp world dist at ${loadedTmpDir}:`, e);
-                }
-                loadedTmpDir = undefined;
-            }
-
-            const runTmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "graphos-world-"));
-            const tmpDistPath = path.join(runTmpRoot, "dist");
-
-            try {
-                fs.cpSync(path.join(env.workDir, "package.json"), path.join(runTmpRoot, "package.json"));
-                fs.cpSync(path.join(env.workDir, "node_modules"), path.join(runTmpRoot, "node_modules"), { recursive: true });
-                fs.cpSync(sourceDistPath, tmpDistPath, { recursive: true });
-                loadedTmpDir = runTmpRoot;
-            } catch (e) {
-                console.error(`Failed to copy world dist from ${sourceDistPath} to temp path ${tmpDistPath}:`, e);
-                return;
-            }
-
-            const entryPath = path.join(tmpDistPath, "src/app.js");
+            const entryPath = path.join(sourceDistPath, "src/app.js");
             if (fs.existsSync(entryPath)) {
                 (async () => {
                     try {
@@ -692,14 +669,6 @@ export default function install(app: IApp, env: any) {
             if (tv) clearTimeout(tv);
             tv = undefined;
             app = undefined;
-            if (loadedTmpDir) {
-                try {
-                    fs.rmSync(loadedTmpDir, { recursive: true, force: true });
-                } catch (e) {
-                    console.warn(`Failed to remove temp world dist at ${loadedTmpDir}:`, e);
-                }
-                loadedTmpDir = undefined;
-            }
             for (const cleanup of cleanups) {
                 cleanup();
             }

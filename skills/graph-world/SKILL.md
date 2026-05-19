@@ -172,8 +172,8 @@ Recommended `src/test.ts` initialization example:
 
 ```ts
 import { App, MemStorage } from 'graphos-world-plugin'; // Do not modify this fixed access pattern.
-import { WorldContext } from '../gen/World.js'; // Do not modify this fixed access pattern.
-import createWorldContext from './app.js'; // Do not modify this fixed access pattern.
+import { WorldContext } from '../gen/World'; // Do not modify this fixed access pattern.
+import createWorldContext from './app'; // Do not modify this fixed access pattern.
 
 let _app: App = new App(new MemStorage());
 let _world: WorldContext = createWorldContext(_app);
@@ -269,7 +269,7 @@ Completion check:
 TypeScript example (implement System after Graph is validated):
 
 ```ts
-import type { GameplayContext } from './gen/World.js'; // graph auto-generated TypeScript types
+import type { GameplayContext } from './gen/World'; // graph auto-generated TypeScript types
 import type { ISystem } from 'graphos-world-plugin';
 
 export function createGameBootstrapSystem(): ISystem<GameplayContext> {
@@ -326,7 +326,7 @@ TypeScript example (`System.spawn` for baseline initialization):
 
 ```ts
 import type { ISystem } from 'graphos-world-plugin';
-import { WorldContext } from '../gen/World.js';
+import { WorldContext } from '../gen/World';
 
 export function createWorldBootstrapSystem(): ISystem<WorldContext> {
    return {
@@ -367,7 +367,7 @@ Completion check:
 TypeScript example (implement EventSystem after Graph trigger chain is validated):
 
 ```ts
-import type { ChickenMergeLiteWorldContext, IChickenShootEvent } from './gen/World.js'; // graph auto-generated TypeScript types
+import type { ChickenMergeLiteWorldContext, IChickenShootEvent } from './gen/World'; // graph auto-generated TypeScript types
 import type { ISystem } from 'graphos-world-plugin';
 
 export type SpawnBulletOnShootEventSystem = ISystem<ChickenMergeLiteWorldContext, IChickenShootEvent>;
@@ -402,9 +402,9 @@ Application registration example (`src/app.ts`):
 
 ```ts
 import { App } from 'graphos-world-plugin';
-import { MatchLoopContext, WorldContext } from '../gen/World.js';
-import { createMatchLifecycleSystem } from './MatchLifecycleSystem.js';
-import { createApplyConfigHotReloadEventSystem } from './ApplyConfigHotReloadEventSystem.js';
+import { MatchLoopContext, WorldContext } from '../gen/World';
+import { createMatchLifecycleSystem } from './MatchLifecycleSystem';
+import { createApplyConfigHotReloadEventSystem } from './ApplyConfigHotReloadEventSystem';
 
 export default function (app: App): WorldContext {
    app.addSystem(MatchLoopContext.Table, createMatchLifecycleSystem());
