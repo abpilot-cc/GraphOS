@@ -20,6 +20,13 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 - Event: World-level event definition.
 - EventSystem: Event-driven handler under Event.
 
+## Configuration Boundary (Mandatory)
+
+- Graph defines runtime logic structure only: `World`/`Context`/`Variant`/`System`/`Event`/`EventSystem` and their ownership/trigger relations.
+- Do not model configuration-only structures in Graph (for example config catalogs, environment profiles, tuning tables, feature-flag maps, platform build config).
+- During code generation and runtime implementation, design configuration structures in code (for example `src/config.ts`, typed constants/interfaces, loaders/adapters), and keep them outside Graph topology.
+- If a field is needed only to configure implementation and is not domain runtime state, keep it in code config instead of Graph `Variant`.
+
 ## When to Use
 
 - You are designing a new game/app world model from scratch.
@@ -233,6 +240,7 @@ Decision points:
 - Prefer `JSONSchema` only for structured objects; otherwise use primitive types.
 - If data must survive as part of the graph-defined state, design it as a `Variant`.
 - If data is only a temporary cache, intermediate computation result, or frame-local working set, keep it inside the relevant `System` instead of adding a `Variant`.
+- If data is configuration-only (build/runtime tuning, environment selection, feature flags, generator options), do not define it in Graph; define it in code configuration during generation/implementation.
 - Graph design should contain logical/domain state only, not presentation-layer widgets, styles, animations, or rendering concerns.
 - Design `Context` and its `Variant`s so the View layer can react to data changes through observation/binding.
 - If the View depends on explicit runtime states such as loading, selected, active, disabled, visible, phase, or mode, model those as logical state in `Context`/`Variant` rather than leaving them implicit in the presentation layer.
@@ -505,6 +513,7 @@ Completion check:
 4. Event gate: Event/EventSystem pairs cover bootstrap and key domain triggers.
 5. Verification gate: re-run `get_graph_description` after each apply and confirm expected node/edge deltas.
 6. Diagram gate: `gen/GRAPH.md` is updated and reflects the current closed-loop workflow.
+7. Config boundary gate: Graph contains no configuration-only structure; configuration design is implemented in generated/runtime code.
 
 ## Suggested Prompt Inputs
 

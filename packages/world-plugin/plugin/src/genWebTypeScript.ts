@@ -162,7 +162,12 @@ function jsonSchemaToTs(schema: any): string {
 
     const type = schema.type?.toLowerCase().trim();
 
-    if (type === 'string') return 'string';
+    if (type === 'string') {
+        if (schema.enum) {
+            return schema.enum.map((v: any) => JSON.stringify(v)).join(' | ');
+        }
+        return 'string';
+    }
     if (type === 'number' || type === 'integer') return 'number';
     if (type === 'boolean') return 'boolean';
 
