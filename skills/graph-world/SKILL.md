@@ -394,7 +394,7 @@ Implementation guidance:
 - Ensure Event payload fields are defined in Graph and match `IChickenShootEvent`.
 - For events consumed mainly by the presentation/UI layer, prefer signal-style Events with no payload; add fields only when the UI cannot derive the required state from `Context`.
 - Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
-- If Event or payload schema changes in Graph, regenerate `./gen/World.js` types before updating EventSystem code.
+- If Event or payload schema changes in Graph, regenerate `./gen/World` types before updating EventSystem code.
 - Do not create module-level or global cache/state for `EventSystem` implementations.
 - Any cache must live inside the `create...EventSystem` factory function scope (closure) so each created event-system instance owns its own cache.
 - Put shared data contracts, constants, and Context singleton ids/names used by generated `EventSystem` code into `src/types.ts`, then import them from `EventSystem` files.
