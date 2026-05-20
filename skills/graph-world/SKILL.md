@@ -17,8 +17,16 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 - Context: Hierarchical domain/data model node under World or Context. Context belongs to the logical/data layer, not the presentation layer, but should expose the state that the View layer needs to observe. Context also has built-in storage semantics, so logic should prefer reusing existing Context instances/state before creating new ones.
 - Variant: Typed variable definition under World or Context. Variant is the default design surface for persistent/stored runtime data.
 - System: Lifecycle logic node under World or Context. Temporary cache or ephemeral working state should be handled inside the owning System rather than modeled as stored graph data.
-- Event: World-level event definition.
+- Event: World-level event definition. Event naming must encode its layer boundary: names starting with `On` represent presentation-layer events and should keep payloads minimal, ideally no payload; names starting with `Logic` represent internal logic-layer events and are reserved for world/domain orchestration inside the logic layer.
 - EventSystem: Event-driven handler under Event.
+
+## Event Naming Boundary (Mandatory)
+
+- Use the `On` prefix for presentation-layer events only.
+- `On...` events represent signals emitted toward or from the View/presentation layer and should use the smallest payload possible, preferably no payload when the View can derive state from observed Context data.
+- Use the `Logic` prefix for internal logic-layer events only.
+- `Logic...` events are for domain/runtime coordination inside the world model and should not be used as presentation-facing event names.
+- Do not mix the two semantics in a single event name. If an event crosses both concerns, split it into a logic event and a separate presentation event.
 
 ## Configuration Boundary (Mandatory)
 
@@ -305,6 +313,7 @@ Implementation guidance:
 - If Graph changes update generated context types, regenerate types first, then update this System implementation.
 - Keep presentation behavior outside `System`; the View layer should react by observing `Context` data changes.
 - Intermediate cache should be handled privately inside each `System` and should not leak into presentation concerns.
+- Do not add a mandatory `.js` suffix rule for TypeScript `import from` paths; follow the project's existing import style instead of forcing `.js` path rewriting in generated code examples.
 - Do not create module-level or global cache/state for `System` implementations.
 - Any cache must live inside the `create...System` factory function scope (closure) so each created system instance owns its own cache.
 - Put shared data contracts, constants, and Context singleton ids/names used by generated `System` code into `src/types.ts`, then import them from `System` files.
@@ -366,6 +375,8 @@ Decision points:
 - Use `EventSystem` when handling should be decoupled from per-frame System logic.
 - For bootstrap flows, prefer an explicit startup/boot event plus handler.
 - For UI-facing events, keep the Event data model as small as possible and prefer defining no payload fields unless data is strictly required.
+- Name presentation-layer events with the `On` prefix and keep them signal-like whenever possible.
+- Name internal logic-layer events with the `Logic` prefix and use them for domain orchestration rather than View-facing notifications.
 
 Completion check:
 - Every critical trigger has an Event.
@@ -395,6 +406,7 @@ Implementation guidance:
 - For events consumed mainly by the presentation/UI layer, prefer signal-style Events with no payload; add fields only when the UI cannot derive the required state from `Context`.
 - Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
 - If Event or payload schema changes in Graph, regenerate `./gen/World` types before updating EventSystem code.
+- Do not require `.js` suffixes in TypeScript `import from` paths unless the target project already uses that convention; generated EventSystem examples should preserve the repo's native import style.
 - Do not create module-level or global cache/state for `EventSystem` implementations.
 - Any cache must live inside the `create...EventSystem` factory function scope (closure) so each created event-system instance owns its own cache.
 - Put shared data contracts, constants, and Context singleton ids/names used by generated `EventSystem` code into `src/types.ts`, then import them from `EventSystem` files.
@@ -424,6 +436,7 @@ export default function (app: App): WorldContext {
 Registration guidance:
 - Register every generated `System` and `EventSystem` in `src/app.ts`.
 - Keep imported symbol names aligned with the generated PascalCase file names and graph node names.
+- Do not enforce adding `.js` to `import from` paths in `src/app.ts`; keep imports consistent with the surrounding TypeScript project style.
 - Use the owning Context table when calling `app.addSystem(...)`.
 - Use the exact graph `Event` name when calling `app.addEventSystem(...)`.
 - Keep the `src/app.ts` default export signature fixed as `export default function (app: App): WorldContext`; this format is mandatory and must not be changed.
