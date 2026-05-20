@@ -49,6 +49,11 @@ type WsEnvelope<T = unknown> = {
   payload?: T;
 };
 
+type SyncHistoryHint = {
+  title: string;
+  summary?: string;
+};
+
 function GraphOS() {
   const { t, i18n } = useTranslation();
   const { screenToFlowPosition } = useReactFlow();
@@ -94,6 +99,26 @@ function GraphOS() {
     const message: WsEnvelope = { type, payload };
     socket.send(JSON.stringify(message));
   }, [socket]);
+
+  const getNodeHistoryLabel = useCallback((node: Node | null | undefined) => {
+    if (!node) return 'Unknown node';
+
+    const name = (node.data as NodeData | undefined)?.properties?.name;
+    if (typeof name === 'string' && name.trim()) {
+      return name.trim();
+    }
+
+    return `${node.type || 'node'} (${node.id})`;
+  }, []);
+
+  const sendGraphSync = useCallback((nextNodes: Node[], nextEdges: Edge[], historyHint?: SyncHistoryHint) => {
+    sendWs('sync-graph', {
+      graphId: currentGraphId,
+      nodes: nextNodes,
+      edges: nextEdges,
+      historyHint,
+    });
+  }, [currentGraphId, sendWs]);
 
   const tabs = useMemo(() => {
     const pluginTabItems = pluginTabs.map((tab) => ({
@@ -506,10 +531,15 @@ function GraphOS() {
   const onConnect = useCallback((params: Connection) => {
     if (!isConnectionAllowed(params)) return;
     const newEdge = addEdge(params, edgesRef.current);
+    const sourceNode = nodesRef.current.find((node) => node.id === params.source);
+    const targetNode = nodesRef.current.find((node) => node.id === params.target);
     setEdges(newEdge);
     edgesRef.current = newEdge;
-    sendWs('sync-graph', { graphId: currentGraphId, nodes: nodesRef.current, edges: newEdge });
-  }, [currentGraphId, setEdges, isConnectionAllowed, sendWs]);
+    sendGraphSync(nodesRef.current, newEdge, {
+      title: `Connected: ${getNodeHistoryLabel(sourceNode)} -> ${getNodeHistoryLabel(targetNode)}`,
+      summary: `connect:${params.source}->${params.target}`,
+    });
+  }, [setEdges, isConnectionAllowed, sendGraphSync, getNodeHistoryLabel]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -551,11 +581,19 @@ function GraphOS() {
 
     const nextNodes = nodes.concat(newNode);
     setNodes(nextNodes);
-    sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
-  }, [nodes, edges, currentGraphId, setNodes, screenToFlowPosition, nodeTypeRegistry, sendWs]);
+    sendGraphSync(nextNodes, edges, {
+      title: `Added node: ${newName}`,
+      summary: `add-node:${type}:${newNode.id}`,
+    });
+  }, [nodes, edges, setNodes, screenToFlowPosition, nodeTypeRegistry, sendGraphSync]);
 
   const onGraphNodesChange = useCallback((changes: NodeChange[]) => {
     let nextNodes: Node[] = nodesRef.current;
+    const removedNodes = changes
+      .filter((change) => change.type === 'remove')
+      .map((change) => nodesRef.current.find((node) => node.id === change.id))
+      .filter((node): node is Node => Boolean(node));
+
     setNodes((prev) => {
       nextNodes = applyNodeChanges(changes, prev as Node[]);
       nodesRef.current = nextNodes;
@@ -569,26 +607,58 @@ function GraphOS() {
     );
     if (hasOnlyLocalChanges) return;
 
-    sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges: edgesRef.current });
-  }, [setNodes, currentGraphId, sendWs]);
+    const historyHint = removedNodes.length === 1
+      ? {
+          title: `Deleted node: ${getNodeHistoryLabel(removedNodes[0])}`,
+          summary: `delete-node:${removedNodes[0].id}`,
+        }
+      : removedNodes.length > 1
+        ? {
+            title: `Deleted ${removedNodes.length} nodes`,
+            summary: `delete-nodes:${removedNodes.map((node) => node.id).join(',')}`,
+          }
+        : undefined;
+
+    sendGraphSync(nextNodes, edgesRef.current, historyHint);
+  }, [setNodes, sendGraphSync, getNodeHistoryLabel]);
 
   const onNodeDragStop = useCallback(() => {
-    sendWs('sync-graph', {
-      graphId: currentGraphId,
-      nodes: nodesRef.current,
-      edges: edgesRef.current,
+    const selectedNode = nodesRef.current.find((node) => node.id === selectedNodeId);
+    sendGraphSync(nodesRef.current, edgesRef.current, {
+      title: selectedNode
+        ? `Moved node: ${getNodeHistoryLabel(selectedNode)}`
+        : 'Moved canvas nodes',
+      summary: selectedNode ? `move-node:${selectedNode.id}` : 'move-nodes',
     });
-  }, [currentGraphId, sendWs]);
+  }, [selectedNodeId, sendGraphSync, getNodeHistoryLabel]);
 
   const onGraphEdgesChange = useCallback((changes: EdgeChange[]) => {
     let nextEdges: Edge[] = edgesRef.current;
+    const removedEdges = changes
+      .filter((change) => change.type === 'remove')
+      .map((change) => edgesRef.current.find((edge) => edge.id === change.id))
+      .filter((edge): edge is Edge => Boolean(edge));
+
     setEdges((prev) => {
       nextEdges = applyEdgeChanges(changes, prev as Edge[]);
       edgesRef.current = nextEdges;
       return nextEdges;
     });
-    sendWs('sync-graph', { graphId: currentGraphId, nodes: nodesRef.current, edges: nextEdges });
-  }, [setEdges, currentGraphId, sendWs]);
+
+    const historyHint = removedEdges.length === 1
+      ? {
+          title: `Disconnected: ${getNodeHistoryLabel(nodesRef.current.find((node) => node.id === removedEdges[0].source))} -> ${getNodeHistoryLabel(nodesRef.current.find((node) => node.id === removedEdges[0].target))}`,
+          summary: `disconnect:${removedEdges[0].source}->${removedEdges[0].target}`,
+        }
+      : removedEdges.length > 1
+        ? {
+            title: `Disconnected ${removedEdges.length} edges`,
+            summary: `disconnect-edges:${removedEdges.map((edge) => `${edge.source}->${edge.target}`).join(',')}`,
+          }
+        : undefined;
+
+    sendGraphSync(nodesRef.current, nextEdges, historyHint);
+  }, [setEdges, sendGraphSync, getNodeHistoryLabel]);
 
   const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: Node[] }) => {
     const nextSelectedNodeId = selectedNodes[0]?.id || null;
@@ -597,15 +667,28 @@ function GraphOS() {
   }, [currentGraphId, sendWs]);
 
   const updateNodeProperty = (id: string, key: string, value: unknown) => {
-    const nextNodes = nodes.map((n) =>
+    const previousNode = nodesRef.current.find((n) => n.id === id);
+    const nextNodes = nodesRef.current.map((n) =>
       n.id === id
         ? { ...n, data: { ...n.data, properties: { ...((n.data as NodeData).properties ?? {}), [key]: value } } }
         : n
     );
+    nodesRef.current = nextNodes;
     setNodes(nextNodes);
-    sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
+    const nextNode = nextNodes.find((n) => n.id === id);
+    const historyHint = key === 'name'
+      ? {
+          title: `Renamed node: ${getNodeHistoryLabel(previousNode)} -> ${getNodeHistoryLabel(nextNode)}`,
+          summary: `rename-node:${id}`,
+        }
+      : {
+          title: `Updated property: ${getNodeHistoryLabel(nextNode)}.${key}`,
+          summary: `update-property:${id}:${key}`,
+        };
 
-    const updatedNode = nextNodes.find((n) => n.id === id);
+    sendGraphSync(nextNodes, edgesRef.current, historyHint);
+
+    const updatedNode = nextNode;
     if (updatedNode && updatedNode.type) {
       const nodeTypeDef = nodeTypeRegistry.find((nt) => nt.type === updatedNode.type);
       if (nodeTypeDef) {
@@ -676,13 +759,16 @@ function GraphOS() {
         };
         const nextNodes = nodes.concat(newNode);
         setNodes(nextNodes);
-        sendWs('sync-graph', { graphId: currentGraphId, nodes: nextNodes, edges });
+        sendGraphSync(nextNodes, edges, {
+          title: `Pasted node: ${newName}`,
+          summary: `paste-node:${src.type}:${newNode.id}`,
+        });
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nodes, edges, currentGraphId, selectedNodeId, setNodes, sendWs]);
+  }, [nodes, edges, selectedNodeId, setNodes, sendGraphSync]);
 
   const createNewGraph = () => {
     sendWs('create-graph', 'Untitled Graph');

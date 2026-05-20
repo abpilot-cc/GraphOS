@@ -13,11 +13,61 @@ export type GraphHistoryRecord = {
   graphName: string;
   createdAt: string;
   source: string;
+  title: string;
   summary: string;
   snapshot: IGraph;
 };
 
 export type GraphHistoryEntry = Omit<GraphHistoryRecord, "snapshot">;
+
+export type AppendGraphHistoryOptions = {
+  title?: string;
+  summary?: string;
+};
+
+function normalizeHistoryTitle(
+  source: string,
+  providedTitle: string | undefined,
+  previousSnapshot: IGraph | undefined,
+  nextSnapshot: IGraph,
+): string {
+  if (providedTitle && providedTitle.trim().length > 0) {
+    return providedTitle.trim();
+  }
+
+  const previousName = (previousSnapshot?.name ?? "").trim();
+  const nextName = (nextSnapshot.name ?? "").trim();
+  if (previousSnapshot && previousName !== nextName) {
+    const from = previousName || "(untitled)";
+    const to = nextName || "(untitled)";
+    return `Title updated: ${from} -> ${to}`;
+  }
+
+  if (source === "ui.create-graph") {
+    return `Created graph: ${nextName || nextSnapshot.id}`;
+  }
+
+  if (source === "ui.duplicate-graph") {
+    return `Duplicated graph: ${nextName || nextSnapshot.id}`;
+  }
+
+  if (source === "api.apply") {
+    return "Applied graph operations";
+  }
+
+  if (source === "ui.sync-graph") {
+    return "Canvas changes synced";
+  }
+
+  return source;
+}
+
+function normalizeHistorySummary(source: string, summary: string | undefined): string {
+  if (summary && summary.trim().length > 0) {
+    return summary.trim();
+  }
+  return source;
+}
 
 function toWorkingDirKey(workingDir: string): string {
   return crypto.createHash("sha1").update(path.resolve(workingDir)).digest("hex");
@@ -42,7 +92,25 @@ function readRecords(workingDir: string, graphId: string): GraphHistoryRecord[] 
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as GraphHistoryRecord[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((r) => r && typeof r.id === "string" && typeof r.graphId === "string");
+    return parsed
+      .filter((r) => r && typeof r.id === "string" && typeof r.graphId === "string")
+      .map((r) => {
+        const summary = normalizeHistorySummary(
+          typeof r.source === "string" ? r.source : "unknown",
+          typeof r.summary === "string" ? r.summary : undefined,
+        );
+        const title =
+          typeof r.title === "string" && r.title.trim().length > 0
+            ? r.title.trim()
+            : summary;
+
+        return {
+          ...r,
+          source: typeof r.source === "string" ? r.source : "unknown",
+          summary,
+          title,
+        };
+      });
   } catch {
     return [];
   }
@@ -62,7 +130,7 @@ export function appendGraphHistory(
   workingDir: string,
   graph: IGraph,
   source: string,
-  summary?: string,
+  options: AppendGraphHistoryOptions = {},
 ): GraphHistoryEntry[] {
   const current = readRecords(workingDir, graph.id);
   const snapshot = JSON.parse(JSON.stringify(graph)) as IGraph;
@@ -79,7 +147,8 @@ export function appendGraphHistory(
     graphName: graph.name,
     createdAt: new Date().toISOString(),
     source,
-    summary: summary ?? source,
+    title: normalizeHistoryTitle(source, options.title, lastSnapshot, snapshot),
+    summary: normalizeHistorySummary(source, options.summary),
     snapshot,
   };
 

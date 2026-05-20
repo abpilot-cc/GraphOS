@@ -172,6 +172,7 @@ export function handlePostGraphApply(realtime: RealtimeServer, pluginManager: Pl
     if (applied.length > 0) {
       saveGraph(graph, {
         source: "api.apply",
+        title: `Applied ${applied.length} operation${applied.length > 1 ? "s" : ""}`,
         summary: applied.join(", "),
       });
       realtime.broadcastGraph(graphId, "graph-update", toRFGraph(graph));

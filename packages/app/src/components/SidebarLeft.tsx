@@ -179,6 +179,7 @@ export default function SidebarLeft({
 
             {graphHistory.map((entry) => {
               const isRestoring = restoringHistoryId === entry.id;
+              const displayTitle = entry.title || entry.summary || entry.source;
               return (
                 <div
                   key={entry.id}
@@ -186,7 +187,10 @@ export default function SidebarLeft({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-text-primary truncate">{entry.summary || entry.source}</div>
+                      <div className="text-[12px] font-bold text-text-primary leading-snug break-words">{displayTitle}</div>
+                      {!!entry.summary && (
+                        <div className="text-[10px] text-text-secondary mt-1 truncate">{entry.summary}</div>
+                      )}
                       <div className="text-[10px] text-text-secondary truncate">{entry.source}</div>
                     </div>
                     <button

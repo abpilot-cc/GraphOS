@@ -37,6 +37,7 @@ export interface GraphHistoryEntry {
   graphName: string;
   createdAt: string;
   source: string;
+  title: string;
   summary: string;
 }
 

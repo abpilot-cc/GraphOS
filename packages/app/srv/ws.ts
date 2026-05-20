@@ -1,6 +1,6 @@
 import fs from "fs";
 import type { RawData, WebSocketServer } from "ws";
-import type { IGraph } from "graphos-core";
+import type { IGraph, INode } from "graphos-core";
 import type { PluginManager } from "./plugin-manager.ts";
 import {
   getCurrentOpenGraphId,
@@ -53,6 +53,207 @@ function asNullableString(value: unknown): string | null {
   return value;
 }
 
+function getNodeDisplayName(node: INode | undefined) {
+  if (!node) return "Unknown node";
+
+  const rawName = node.properties?.name;
+  if (typeof rawName === "string" && rawName.trim().length > 0) {
+    return rawName.trim();
+  }
+
+  return `${node.type} (${node.id})`;
+}
+
+function describeCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function normalizeSyncHistoryHint(value: unknown): { title?: string; summary?: string } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const hint = value as { title?: unknown; summary?: unknown };
+  const title = typeof hint.title === "string" && hint.title.trim().length > 0
+    ? hint.title.trim()
+    : undefined;
+  const summary = typeof hint.summary === "string" && hint.summary.trim().length > 0
+    ? hint.summary.trim()
+    : undefined;
+
+  if (!title && !summary) return undefined;
+  return { title, summary };
+}
+
+function getChangedPropertyKeys(previousNode: INode, nextNode: INode) {
+  const previousProperties = previousNode.properties ?? {};
+  const nextProperties = nextNode.properties ?? {};
+  const keys = new Set([...Object.keys(previousProperties), ...Object.keys(nextProperties)]);
+
+  return [...keys].filter((key) => {
+    return JSON.stringify(previousProperties[key]) !== JSON.stringify(nextProperties[key]);
+  });
+}
+
+function buildSyncHistoryDescription(previousGraph: IGraph, nextGraph: IGraph) {
+  const previousNodes = new Map(previousGraph.nodes.map((node) => [node.id, node]));
+  const nextNodes = new Map(nextGraph.nodes.map((node) => [node.id, node]));
+  const previousEdges = new Set(previousGraph.edges.map(([source, target]) => `${source}->${target}`));
+  const nextEdges = new Set(nextGraph.edges.map(([source, target]) => `${source}->${target}`));
+
+  const addedNodes = nextGraph.nodes.filter((node) => !previousNodes.has(node.id));
+  const removedNodes = previousGraph.nodes.filter((node) => !nextNodes.has(node.id));
+  const movedNodes = nextGraph.nodes.filter((node) => {
+    const previousNode = previousNodes.get(node.id);
+    return !!previousNode && (
+      previousNode.position[0] !== node.position[0] || previousNode.position[1] !== node.position[1]
+    );
+  });
+  const renamedNodes = nextGraph.nodes.filter((node) => {
+    const previousNode = previousNodes.get(node.id);
+    const previousName = previousNode?.properties?.name;
+    const nextName = node.properties?.name;
+    return (
+      !!previousNode &&
+      typeof previousName === "string" &&
+      typeof nextName === "string" &&
+      previousName.trim() !== nextName.trim()
+    );
+  });
+  const propertyUpdates = nextGraph.nodes.flatMap((node) => {
+    const previousNode = previousNodes.get(node.id);
+    if (!previousNode) return [];
+
+    const changedKeys = getChangedPropertyKeys(previousNode, node);
+    const nonNameKeys = changedKeys.filter((key) => key !== "name");
+    if (nonNameKeys.length === 0) return [];
+
+    return [{
+      node,
+      changedKeys: nonNameKeys,
+    }];
+  });
+
+  const addedEdges = nextGraph.edges.filter(
+    ([source, target]) => !previousEdges.has(`${source}->${target}`),
+  );
+  const removedEdges = previousGraph.edges.filter(
+    ([source, target]) => !nextEdges.has(`${source}->${target}`),
+  );
+
+  const totalChanges = [
+    addedNodes.length,
+    removedNodes.length,
+    movedNodes.length,
+    renamedNodes.length,
+    propertyUpdates.length,
+    addedEdges.length,
+    removedEdges.length,
+  ].reduce((sum, count) => sum + count, 0);
+
+  if (totalChanges === 1) {
+    if (addedNodes.length === 1) {
+      const node = addedNodes[0];
+      return {
+        title: `Added node: ${getNodeDisplayName(node)}`,
+        summary: `add-node:${node.type}:${node.id}`,
+      };
+    }
+
+    if (removedNodes.length === 1) {
+      const node = removedNodes[0];
+      return {
+        title: `Deleted node: ${getNodeDisplayName(node)}`,
+        summary: `delete-node:${node.type}:${node.id}`,
+      };
+    }
+
+    if (movedNodes.length === 1) {
+      const node = movedNodes[0];
+      return {
+        title: `Moved node: ${getNodeDisplayName(node)}`,
+        summary: `move-node:${node.id}`,
+      };
+    }
+
+    if (renamedNodes.length === 1) {
+      const node = renamedNodes[0];
+      const previousNode = previousNodes.get(node.id);
+      return {
+        title: `Renamed node: ${getNodeDisplayName(previousNode)} -> ${getNodeDisplayName(node)}`,
+        summary: `rename-node:${node.id}`,
+      };
+    }
+
+    if (propertyUpdates.length === 1) {
+      const update = propertyUpdates[0];
+      if (update.changedKeys.length === 1) {
+        const key = update.changedKeys[0];
+        return {
+          title: `Updated property: ${getNodeDisplayName(update.node)}.${key}`,
+          summary: `update-property:${update.node.id}:${key}`,
+        };
+      }
+
+      return {
+        title: `Updated ${update.changedKeys.length} properties: ${getNodeDisplayName(update.node)}`,
+        summary: `update-properties:${update.node.id}:${update.changedKeys.join(",")}`,
+      };
+    }
+
+    if (addedEdges.length === 1) {
+      const [source, target] = addedEdges[0];
+      return {
+        title: `Connected: ${getNodeDisplayName(nextNodes.get(source))} -> ${getNodeDisplayName(nextNodes.get(target))}`,
+        summary: `connect:${source}->${target}`,
+      };
+    }
+
+    if (removedEdges.length === 1) {
+      const [source, target] = removedEdges[0];
+      return {
+        title: `Disconnected: ${getNodeDisplayName(previousNodes.get(source))} -> ${getNodeDisplayName(previousNodes.get(target))}`,
+        summary: `disconnect:${source}->${target}`,
+      };
+    }
+  }
+
+  const titleParts: string[] = [];
+  const summaryParts: string[] = [];
+
+  if (addedNodes.length > 0) {
+    titleParts.push(`added ${describeCount(addedNodes.length, "node")}`);
+    summaryParts.push(`added ${addedNodes.slice(0, 3).map((node) => getNodeDisplayName(node)).join(", ")}`);
+  }
+  if (removedNodes.length > 0) {
+    titleParts.push(`deleted ${describeCount(removedNodes.length, "node")}`);
+    summaryParts.push(`deleted ${removedNodes.slice(0, 3).map((node) => getNodeDisplayName(node)).join(", ")}`);
+  }
+  if (movedNodes.length > 0) {
+    titleParts.push(`moved ${describeCount(movedNodes.length, "node")}`);
+    summaryParts.push(`moved ${movedNodes.slice(0, 3).map((node) => getNodeDisplayName(node)).join(", ")}`);
+  }
+  if (renamedNodes.length > 0) {
+    titleParts.push(`renamed ${describeCount(renamedNodes.length, "node")}`);
+    summaryParts.push(`renamed ${renamedNodes.slice(0, 3).map((node) => getNodeDisplayName(node)).join(", ")}`);
+  }
+  if (propertyUpdates.length > 0) {
+    titleParts.push(`updated ${describeCount(propertyUpdates.length, "node")}`);
+    summaryParts.push(`updated ${propertyUpdates.slice(0, 3).map((update) => `${getNodeDisplayName(update.node)}.${update.changedKeys.join("/")}`).join(", ")}`);
+  }
+  if (addedEdges.length > 0) {
+    titleParts.push(`connected ${describeCount(addedEdges.length, "edge")}`);
+    summaryParts.push(`connected ${addedEdges.slice(0, 3).map(([source, target]) => `${getNodeDisplayName(nextNodes.get(source))} -> ${getNodeDisplayName(nextNodes.get(target))}`).join(", ")}`);
+  }
+  if (removedEdges.length > 0) {
+    titleParts.push(`disconnected ${describeCount(removedEdges.length, "edge")}`);
+    summaryParts.push(`disconnected ${removedEdges.slice(0, 3).map(([source, target]) => `${getNodeDisplayName(previousNodes.get(source))} -> ${getNodeDisplayName(previousNodes.get(target))}`).join(", ")}`);
+  }
+
+  return {
+    title: titleParts.length > 0 ? `Canvas updated: ${titleParts.join(", ")}` : "Canvas changes synced",
+    summary: summaryParts.length > 0 ? summaryParts.join("; ") : "sync",
+  };
+}
+
 function sendGraphList(realtime: RealtimeServer, client: RealtimeClient) {
   const list = listGraphs();
   console.log("Sending graph list:", list.length, "items");
@@ -94,7 +295,11 @@ function handleCreateGraph(realtime: RealtimeServer, client: RealtimeClient, nam
   console.log(`Creating graph: ${graphName}`);
   const id = `graph_${Date.now()}`;
   const newGraph: GraphData = { id, name: graphName, nodes: [], edges: [] };
-  saveGraph(newGraph, { source: "ui.create-graph", summary: `create:${graphName}` });
+  saveGraph(newGraph, {
+    source: "ui.create-graph",
+    title: `Created graph: ${graphName}`,
+    summary: `create:${graphName}`,
+  });
   setCurrentOpenGraphId(id);
   realtime.setClientGraph(client.id, id);
 
@@ -130,6 +335,7 @@ function handleDuplicateGraph(realtime: RealtimeServer, client: RealtimeClient, 
 
   saveGraph(duplicatedGraph, {
     source: "ui.duplicate-graph",
+    title: `Duplicated from: ${sourceGraph.name}`,
     summary: `duplicate:${sourceGraph.id}`,
   });
   setCurrentOpenGraphId(nextId);
@@ -154,8 +360,13 @@ function handleRenameGraph(realtime: RealtimeServer, payload: unknown) {
   if (!fs.existsSync(filePath)) return;
 
   const graph: IGraph = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  const previousName = graph.name;
   graph.name = name;
-  saveGraph(graph, { source: "ui.rename-graph", summary: `rename:${name}` });
+  saveGraph(graph, {
+    source: "ui.rename-graph",
+    title: `Title updated: ${previousName} -> ${name}`,
+    summary: `rename:${name}`,
+  });
 
   realtime.broadcastAll("graph-list", listGraphs());
   realtime.broadcastGraph(id, "graph-update", toRFGraph(graph));
@@ -189,17 +400,25 @@ function handleSelectNode(realtime: RealtimeServer, client: RealtimeClient, payl
 }
 
 function handleSyncGraph(realtime: RealtimeServer, client: RealtimeClient, payload: unknown, pluginManager: PluginManager) {
-  const data = payload as { graphId?: unknown; nodes?: unknown; edges?: unknown };
+  const data = payload as {
+    graphId?: unknown;
+    nodes?: unknown;
+    edges?: unknown;
+    historyHint?: unknown;
+  };
   const graphId = asString(data?.graphId);
   const nodes = (Array.isArray(data?.nodes) ? data.nodes : []) as RFNode[];
   const edges = (Array.isArray(data?.edges) ? data.edges : []) as RFEdge[];
+  const historyHint = normalizeSyncHistoryHint(data?.historyHint);
 
   const filePath = getGraphFilePath(graphId);
   if (!fs.existsSync(filePath)) return;
 
   const graph: IGraph = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  const previousGraph = JSON.parse(JSON.stringify(graph)) as IGraph;
   graph.nodes = nodes.map(rfNodeToINode);
   graph.edges = edges.map(rfEdgeToIEdge);
+  const historyDescription = buildSyncHistoryDescription(previousGraph, graph);
 
   const selectionState = getGraphSelectionState(graphId);
   if (
@@ -210,7 +429,11 @@ function handleSyncGraph(realtime: RealtimeServer, client: RealtimeClient, paylo
     realtime.broadcastGraph(graphId, "graph-selection", { graphId, selectedNodeId: null });
   }
 
-  saveGraph(graph, { source: "ui.sync-graph", summary: "sync" });
+  saveGraph(graph, {
+    source: "ui.sync-graph",
+    title: historyHint?.title ?? historyDescription.title,
+    summary: historyHint?.summary ?? historyDescription.summary,
+  });
   pluginManager.emitAppEvent("changed", { type: "changed", data: graph });
   realtime.broadcastGraph(graphId, "graph-history-updated", {
     graphId,

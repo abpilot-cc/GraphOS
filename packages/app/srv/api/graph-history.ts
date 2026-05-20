@@ -47,7 +47,10 @@ export function handlePostGraphHistoryRestore(realtime: RealtimeServer, pluginMa
       return;
     }
 
-    const snapshot = getGraphHistorySnapshot(getWorkingDir(), graphId, recordId);
+    const workingDir = getWorkingDir();
+    const previousHistory = listGraphHistory(workingDir, graphId);
+    const restoreTarget = previousHistory.find((entry) => entry.id === recordId);
+    const snapshot = getGraphHistorySnapshot(workingDir, graphId, recordId);
     if (!snapshot) {
       res.status(404).json({
         success: false,
@@ -59,8 +62,12 @@ export function handlePostGraphHistoryRestore(realtime: RealtimeServer, pluginMa
     snapshot.id = graphId;
     saveGraph(snapshot, {
       source: "history.restore",
-      summary: `restore:${recordId}`,
-      skipHistory: true,
+      title: restoreTarget
+        ? `Restored to: ${restoreTarget.title}`
+        : `Restored to record: ${recordId}`,
+      summary: restoreTarget
+        ? `restore:${recordId} (${restoreTarget.summary || restoreTarget.source})`
+        : `restore:${recordId}`,
     });
 
     const selectionState = getGraphSelectionState(graphId);
@@ -73,7 +80,7 @@ export function handlePostGraphHistoryRestore(realtime: RealtimeServer, pluginMa
     }
 
     const rfGraph = toRFGraph(snapshot);
-    const history = listGraphHistory(getWorkingDir(), graphId);
+    const history = listGraphHistory(workingDir, graphId);
     realtime.broadcastGraph(graphId, "graph-update", rfGraph);
     realtime.broadcastGraph(graphId, "graph-history-updated", { graphId, history });
     realtime.broadcastAll("graph-list", listGraphs());

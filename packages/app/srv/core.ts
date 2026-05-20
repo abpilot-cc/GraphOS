@@ -125,6 +125,7 @@ export type GraphSelectionState = {
 
 export type SaveGraphOptions = {
   source?: string;
+  title?: string;
   summary?: string;
   skipHistory?: boolean;
 };
@@ -239,7 +240,10 @@ export function saveGraph(graph: GraphData, options: SaveGraphOptions = {}) {
   fs.writeFileSync(targetFilePath, JSON.stringify(graph, null, 2));
 
   if (!options.skipHistory) {
-    appendGraphHistory(getWorkingDir(), graph, options.source ?? "unknown", options.summary);
+    appendGraphHistory(getWorkingDir(), graph, options.source ?? "unknown", {
+      title: options.title,
+      summary: options.summary,
+    });
   }
 
   for (const existingFilePath of existingFilePaths) {
