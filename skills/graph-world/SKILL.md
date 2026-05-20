@@ -109,8 +109,8 @@ npm i -D graphos-world-plugin graphos-cli
 {
    "compilerOptions": {
       "target": "ES2020",
-      "module": "NodeNext",
-      "moduleResolution": "NodeNext",
+      "module": "ESNext",
+      "moduleResolution": "Bundler",
       "strict": true,
       "esModuleInterop": true,
       "forceConsistentCasingInFileNames": true,
