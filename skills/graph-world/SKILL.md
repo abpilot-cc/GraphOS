@@ -147,12 +147,20 @@ Use this when the world plugin simulator is available and you need to inspect ac
 2. Query `/api/world/log` through the GraphOS runtime.
 3. Read the default response first to inspect all logs up to the current simulator time.
 4. When investigating one branch, narrow the query with `startTime` and `endTime` to isolate the simulated interval.
+5. If `/api/world/log` returns a large payload, generate a script to analyze the data instead of relying on manual inspection.
 
 Expected behavior of `/api/world/log`:
 - No query parameters: returns logs at simulated times `<= current`.
 - `startTime` only: returns logs in `[startTime, current]`.
 - `endTime` only: returns logs in `(-∞, endTime]`.
 - `startTime` and `endTime`: returns logs in `[startTime, endTime]`.
+
+When the `/api/world/log` response is large:
+- Generate a small analysis script to parse, filter, group, and summarize the log records.
+- Prefer script output over raw full-log printing; emit condensed summaries such as event counts, time ranges, target Context ids, and suspicious error patterns.
+- Use the script to isolate the exact branch, Event, System, or Context mutation under investigation before making graph or runtime changes.
+- Keep the script focused on the current debugging target and make its filters explicit, for example by event name, log type, Context id, or simulated time window.
+- If needed, iterate by refining the script filters rather than repeatedly reading the full `/api/world/log` payload manually.
 
 Use simulator log inspection for:
 - Verifying that expected `event`, `get`, `set`, `add`, and `del` records were produced.
