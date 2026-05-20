@@ -97,8 +97,7 @@ npm i -D graphos-world-plugin graphos-cli
 {
    "scripts": {
       "graphos": "graphos",
-      "build": "tsc -p tsconfig.world.json",
-      "test:logic": "tsx test.ts"
+      "build": "tsc -p tsconfig.world.json"
    }
 }
 ```
@@ -138,62 +137,6 @@ npm i -D graphos-world-plugin graphos-cli
 ```bash
 npm run graphos -- --help
 npm run build
-npm run test:logic
-```
-
-## Logic Layer Test Harness (`test.ts`)
-
-Use this when you need to verify the logic layer in a headless, deterministic way without the UI.
-
-1. Create `test.ts` as the simulation entry point for logic validation.
-   - Load the generated world/runtime types and register the same `System` / `EventSystem` wiring used by the app.
-   - Run the logic layer against scripted scenarios that represent the main gameplay or business branches.
-   - Keep the harness independent from rendering, DOM, canvas, and presentation-layer code.
-2. Print detailed logs for every scenario and branch.
-   - Log scenario name, input payloads, target Context scopes, and the exact branch being exercised.
-   - Log before/after snapshots for relevant Context and Variant data so failures can be traced quickly.
-   - Log every Event dispatch, System transition, cache decision, and assertion result.
-   - Prefer structured output that is easy to diff, such as JSON payloads plus concise human-readable summaries.
-3. Validate closure with automated assertions.
-   - Assert that each scenario reaches the expected end state.
-   - Assert that each critical logic branch is executed at least once across the scenario matrix.
-   - Assert that no required Event, System, Context, or Variant path remains unvisited for the intended design.
-4. Repeat testing until all game or app branches pass.
-   - If a branch fails, inspect the logs, patch the graph or runtime logic, and rerun the harness.
-   - Continue the scenario matrix until the logic layer is closed-loop and all intended flows pass consistently.
-
-Suggested `package.json` scripts for the harness:
-
-```json
-{
-   "scripts": {
-      "test:logic": "tsx test.ts"
-   }
-}
-```
-
-Suggested `test.ts` responsibilities:
-
-```ts
-// 1. bootstrap app/runtime
-// 2. register generated systems and event systems
-// 3. execute scenario matrix
-// 4. print detailed logs for each step
-// 5. assert expected branch coverage and final state
-// 6. exit non-zero on failure
-```
-
-Recommended `test.ts` initialization example:
-
-```ts
-import { App, MemStorage } from 'graphos-world-plugin'; // Do not modify this fixed access pattern.
-import { WorldContext } from '../gen/World'; // Do not modify this fixed access pattern.
-import createWorldContext from './app'; // Do not modify this fixed access pattern.
-
-let _app: App = new App(new MemStorage());
-let _world: WorldContext = createWorldContext(_app);
-
-// TODO test case for world context
 ```
 
 ## Simulator Log Inspection

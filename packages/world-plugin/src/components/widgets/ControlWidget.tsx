@@ -10,7 +10,7 @@ export function ControlWidget() {
 
   const handleReset = () => {
     lastUpdateRef.current = 0;
-    window.location.reload();
+    client.emit('world-reset');
   };
 
   const setTimeScale = (scale: number) => {
