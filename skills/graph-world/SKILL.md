@@ -196,6 +196,26 @@ let _world: WorldContext = createWorldContext(_app);
 // TODO test case for world context
 ```
 
+## Simulator Log Inspection
+
+Use this when the world plugin simulator is available and you need to inspect actual runtime event flow instead of relying only on static graph structure.
+
+1. Start or drive the simulator until the target branch or scenario has executed.
+2. Query `/api/world/log` through the GraphOS runtime.
+3. Read the default response first to inspect all logs up to the current simulator time.
+4. When investigating one branch, narrow the query with `startTime` and `endTime` to isolate the simulated interval.
+
+Expected behavior of `/api/world/log`:
+- No query parameters: returns logs at simulated times `<= current`.
+- `startTime` only: returns logs in `[startTime, current]`.
+- `endTime` only: returns logs in `(-∞, endTime]`.
+- `startTime` and `endTime`: returns logs in `[startTime, endTime]`.
+
+Use simulator log inspection for:
+- Verifying that expected `event`, `get`, `set`, `add`, and `del` records were produced.
+- Confirming that a `System` or `EventSystem` changed the intended Context data during the expected simulated interval.
+- Narrowing a runtime defect before patching graph topology or generated logic.
+
 ## Modification Rules (Mandatory Order)
 
 These rules are hard constraints for any change workflow:

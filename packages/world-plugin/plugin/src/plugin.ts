@@ -35,6 +35,11 @@ type PluginSocket = {
     __wsMessageListener?: (raw: unknown) => void;
 };
 
+type LogQueryOptions = {
+    start?: number;
+    end?: number;
+};
+
 function isWsSocket(socket: PluginSocket): boolean {
     return typeof socket.send === "function";
 }
@@ -336,6 +341,12 @@ export default function install(app: IApp, env: any) {
     let graph: IGraph | undefined;
     let socketSet = new Set<PluginSocket>();
 
+    const emitAllSockets = (type: string, payload?: unknown) => {
+        for (const socket of socketSet) {
+            emitSocketEvent(socket, type, payload);
+        }
+    };
+
     const setGraph = (g: IGraph) => {
         graph = g;
         for (const socket of socketSet) {
@@ -367,6 +378,256 @@ export default function install(app: IApp, env: any) {
             emitSocketEvent(socket, type, payload);
         }
     };
+
+    const simulator = (() => {
+        let tv: ReturnType<typeof setTimeout> | undefined;
+        let simulatorApp: App | undefined;
+        let worldContext: IEventSource<IObject> | undefined;
+        let duration: number = 0;
+        let current: number = 0;
+        let scale: number = 1.0;
+        let fps: number = 30;
+        let isPaused: boolean = false;
+        let records: AppRecord[] = [];
+
+        const syncSocketRefs = () => {
+            for (const socket of socketSet) {
+                socket.app = simulatorApp;
+                socket.worldContext = worldContext;
+            }
+        };
+
+        const emitState = (target?: PluginSocket) => {
+            const payload = {
+                duration,
+                current,
+                state: simulatorApp ? (isPaused ? 'paused' : 'running') : 'stopped',
+                scale,
+                fps,
+            };
+
+            if (target) {
+                emitSocketEvent(target, 'world-state', payload);
+                return;
+            }
+
+            emitAllSockets('world-state', payload);
+        };
+
+        const clearTimer = () => {
+            if (tv) {
+                clearTimeout(tv);
+                tv = undefined;
+            }
+        };
+
+        const emitRecord = (record: AppRecord, target?: PluginSocket) => {
+            if (target) {
+                emitSocketEvent(target, 'world-event-record', record);
+                return;
+            }
+
+            emitAllSockets('world-event-record', record);
+        };
+
+        const emitRecordClear = (target?: PluginSocket) => {
+            if (target) {
+                emitSocketEvent(target, 'world-event-record-clear');
+                return;
+            }
+
+            emitAllSockets('world-event-record-clear');
+        };
+
+        const pushRecord = (record: AppRecord) => {
+            records.push(record);
+            emitRecord(record);
+        };
+
+        const onUpdate = () => {
+            if (!simulatorApp || isPaused) return;
+
+            const dt = scale / fps;
+            const startedAt = Date.now();
+            simulatorApp.update(dt);
+            duration += dt;
+            current = duration;
+            emitState();
+
+            const elapsed = Date.now() - startedAt;
+            const delay = dt * 1000 - elapsed;
+            tv = setTimeout(onUpdate, Math.max(0, delay));
+        };
+
+        const onInit = () => {
+            if (!simulatorApp) return;
+
+            simulatorApp.ctx.on<GetEvent<IObject>, IObject>('get', (event) => {
+                pushRecord({ time: duration, type: 'get', data: JSON.parse(JSON.stringify(event.source.object)) });
+            });
+
+            simulatorApp.ctx.on<SetEvent<IObject>, IObject>('set', (event) => {
+                pushRecord({
+                    time: duration,
+                    type: 'set',
+                    data: { ...JSON.parse(JSON.stringify(event.data)), id: event.source.object.id, table: event.source.object.table },
+                });
+            });
+
+            simulatorApp.ctx.on<AddEvent<IObject>, IObject>('add', (event) => {
+                pushRecord({ time: duration, type: 'add', data: JSON.parse(JSON.stringify(event.source.object)) });
+            });
+
+            simulatorApp.ctx.on<DelEvent<IObject>, IObject>('del', (event) => {
+                pushRecord({ time: duration, type: 'del', data: { id: event.source.object.id, table: event.source.object.table } });
+            });
+        };
+
+        const loadApp = () => {
+            simulatorApp = new App(new MemStorage());
+            worldContext = undefined;
+            syncSocketRefs();
+            onInit();
+
+            const sourceDistPath = path.join(env.workDir, 'dist');
+            const entryPath = path.join(sourceDistPath, 'src/app.js');
+            if (!fs.existsSync(entryPath)) return;
+
+            (async () => {
+                try {
+                    const url = pathToFileURL(entryPath).href;
+                    let loaded: any = await import(url);
+                    let entryFn: ((runtimeApp: App) => IEventSource<IObject>) | undefined;
+                    while (loaded?.default) {
+                        loaded = loaded.default;
+                        if (typeof loaded === 'function') {
+                            entryFn = loaded;
+                            break;
+                        }
+                    }
+
+                    if (!entryFn || !simulatorApp) return;
+                    worldContext = entryFn(simulatorApp);
+                    syncSocketRefs();
+                }
+                catch (error) {
+                    console.error(`Error loading or executing ${entryPath}:`, error);
+                }
+            })();
+        };
+
+        return {
+            attachSocket(socket: PluginSocket) {
+                socket.app = simulatorApp;
+                socket.worldContext = worldContext;
+                emitState(socket);
+                emitRecordClear(socket);
+                for (const record of records) {
+                    if (record.time <= current) {
+                        emitRecord(record, socket);
+                    }
+                }
+            },
+            emitState(target?: PluginSocket) {
+                emitState(target);
+            },
+            getCurrentTime() {
+                return current;
+            },
+            getLogs(options?: LogQueryOptions) {
+                const start = options?.start ?? Number.NEGATIVE_INFINITY;
+                const end = options?.end ?? current;
+                return records.filter((record) => record.time >= start && record.time <= end);
+            },
+            setTimescale(newScale: number) {
+                scale = newScale;
+                emitState();
+            },
+            setFps(newFps: number) {
+                fps = newFps;
+                emitState();
+            },
+            setCurrent(newCurrent: number) {
+                if (!simulatorApp || !isPaused || newCurrent < 0 || newCurrent > duration || current === newCurrent) return;
+
+                if (newCurrent > current) {
+                    for (const record of records) {
+                        if (record.time > current && record.time <= newCurrent) {
+                            emitRecord(record);
+                        }
+                    }
+                    current = newCurrent;
+                } else {
+                    emitRecordClear();
+                    for (const record of records) {
+                        if (record.time <= newCurrent) {
+                            emitRecord(record);
+                        }
+                    }
+                    current = newCurrent;
+                }
+
+                emitState();
+            },
+            reset() {
+                duration = 0;
+                current = 0;
+                scale = 1.0;
+                fps = 30;
+                isPaused = false;
+                simulatorApp = undefined;
+                worldContext = undefined;
+                records = [];
+                clearTimer();
+                syncSocketRefs();
+                emitRecordClear();
+                emitState();
+            },
+            pause() {
+                isPaused = true;
+                clearTimer();
+                emitState();
+            },
+            resume() {
+                isPaused = false;
+
+                if (current < duration) {
+                    for (const record of records) {
+                        if (record.time > current) {
+                            emitRecord(record);
+                        }
+                    }
+                    current = duration;
+                }
+
+                if (simulatorApp) {
+                    clearTimer();
+                    tv = setTimeout(onUpdate, 0);
+                }
+
+                emitState();
+            },
+            start() {
+                isPaused = false;
+                if (!simulatorApp) {
+                    loadApp();
+                    clearTimer();
+                    tv = setTimeout(onUpdate, 0);
+                }
+                emitState();
+            },
+            sendEvent(data: unknown) {
+                if (!data || typeof data !== 'object') return;
+
+                const eventData = data as Record<string, unknown>;
+                if (typeof eventData.type !== 'string' || !simulatorApp || !worldContext) return;
+
+                const item: AppRecord = { time: duration, type: 'event', data: eventData as unknown as IEvent<IObject> };
+                pushRecord(item);
+                simulatorApp.trigger({ ...eventData, source: worldContext } as IEvent<IObject>);
+            },
+        };
+    })();
 
     app.on('open', (event) => {
         setGraph(event.data);
@@ -414,6 +675,48 @@ export default function install(app: IApp, env: any) {
         }
     });
 
+    app.express().get('/api/world/log', (req, res) => {
+        const parseTime = (value: unknown, name: string): number | undefined => {
+            if (value === undefined) return undefined;
+            const raw = Array.isArray(value) ? value[0] : value;
+            if (raw === undefined || raw === null || raw === '') return undefined;
+            const parsed = Number(raw);
+            if (Number.isNaN(parsed)) {
+                throw new Error(`${name} must be a number`);
+            }
+            return parsed;
+        };
+
+        try {
+            const start = parseTime(req.query.startTime ?? req.query.start, 'startTime');
+            const end = parseTime(req.query.endTime ?? req.query.end, 'endTime');
+            const query: LogQueryOptions = {};
+
+            if (start !== undefined) {
+                query.start = start;
+            }
+
+            if (end !== undefined) {
+                query.end = end;
+            }
+
+            if (start !== undefined && end !== undefined && start > end) {
+                res.status(400).json({ error: 'startTime must be less than or equal to endTime' });
+                return;
+            }
+
+            res.json({
+                current: simulator.getCurrentTime(),
+                start: start ?? null,
+                end: end ?? simulator.getCurrentTime(),
+                logs: simulator.getLogs(query),
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Invalid query parameters';
+            res.status(400).json({ error: message });
+        }
+    });
+
     const distPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../dist");
     app.express().use("/world", express.static(distPath));
     app.express().get("/world/*", (req, res) => {
@@ -435,98 +738,8 @@ export default function install(app: IApp, env: any) {
         const onEvent = <T = unknown>(type: string, handler: (payload: T) => void) => {
             attachSocketEvent(socketLike, type, (payload) => handler(payload as T), cleanups);
         };
-        // You can set up socket event handlers here if needed
-        let tv: any;
-        let app: App | undefined;
-        let worldContext: IEventSource<IObject> | undefined;
-        let duration: number = 0;
-        let current: number = 0;
-        let scale: number = 1.0;
-        let fps: number = 30;
-        let isPaused: boolean = false;
-        let records: AppRecord[] = [];
-        
-        const emitState = () => {
-            emit("world-state", { duration: duration, current: current, state: app ? isPaused ? 'paused' : 'running' : 'stopped', scale: scale, fps: fps });
-        };
 
-        let onUpdate: () => void;
-
-
-        onUpdate = () => {
-            if (!app || isPaused) return;
-            let dt = scale / fps;
-            let t = Date.now();
-            app.update(dt);
-            duration += dt;
-            current = duration;
-            emitState();
-            let e = Date.now() - t;
-            let d = dt * 1000 - e;
-            tv = setTimeout(onUpdate, Math.max(0, d));
-        };
-
-        const onInit = () => {
-            if (!app) return;
-            app.ctx.on<GetEvent<IObject>, IObject>('get', (event) => {
-                let item: AppRecord = { time: duration, type: 'get', data: JSON.parse(JSON.stringify(event.source.object)) };
-                records.push(item);
-                emit('world-event-record', item);
-                emitDevicesEvent('world-event-record', item);
-            });
-
-            app.ctx.on<SetEvent<IObject>, IObject>('set', (event) => {
-                let item: AppRecord = { time: duration, type: 'set', data: { ...JSON.parse(JSON.stringify(event.data)), id: event.source.object.id, table: event.source.object.table } };
-                records.push(item);
-                emit('world-event-record', item);
-                emitDevicesEvent('world-event-record', item);
-            });
-
-            app.ctx.on<AddEvent<IObject>, IObject>('add', (event) => {
-                let item: AppRecord = { time: duration, type: 'add', data: JSON.parse(JSON.stringify(event.source.object)) };
-                records.push(item);
-                emit('world-event-record', item);
-                emitDevicesEvent('world-event-record', item);
-            });
-
-            app.ctx.on<DelEvent<IObject>, IObject>('del', (event) => {
-                let item: AppRecord = { time: duration, type: 'del', data: { id: event.source.object.id, table: event.source.object.table } };
-                records.push(item);
-                emit('world-event-record', item);
-                emitDevicesEvent('world-event-record', item);
-            });
-        };
-
-        const onLoadApp = () => {
-            app = new App(new MemStorage());
-            socketLike.app = app;
-            onInit();
-            const sourceDistPath = path.join(env.workDir, "dist");
-            const entryPath = path.join(sourceDistPath, "src/app.js");
-            if (fs.existsSync(entryPath)) {
-                (async () => {
-                    try {
-                        const url = pathToFileURL(entryPath).href;
-                        let e: any = await import(url);
-                        let fn: (app: App) => IEventSource<IObject>;
-                        while (e.default) {
-                            e = e.default;
-                            if (typeof e === "function") {
-                                fn = e;
-                                break;
-                            }
-                        }
-                        worldContext = fn!(app);
-                        socketLike.worldContext = worldContext;
-                    }
-                    catch (e) {
-                        console.error(`Error loading or executing ${entryPath}:`, e);
-                    }
-                })();
-            }
-        };
-
-        onEvent('world-get-state', () => emitState());
+        onEvent('world-get-state', () => simulator.emitState(socketLike));
 
         onEvent('world-get-graph', () => {
             if (graph) {
@@ -535,122 +748,37 @@ export default function install(app: IApp, env: any) {
         })
 
         onEvent<number>('world-set-timescale', (newScale) => {
-            scale = newScale;
-            emitState();
+            simulator.setTimescale(newScale);
         });
 
         onEvent<number>('world-set-fps', (newFps) => {
-            fps = newFps;
-            emitState();
+            simulator.setFps(newFps);
         });
 
         onEvent<number>('world-set-current', (newCurrent) => {
-            if (!app || !isPaused || newCurrent < 0 || newCurrent > duration || current === newCurrent) return;
-            if (newCurrent > current) {
-                for (let record of records) {
-                    if (record.time > current && record.time <= newCurrent) {
-                        emit('world-event-record', record);
-                        emitDevicesEvent('world-event-record', record);
-                    }
-                }
-                current = newCurrent;
-            } else {
-                emit('world-event-record-clear');
-                emitDevicesEvent('world-event-record-clear');
-                for (let record of records) {
-                    if (record.time <= newCurrent) {
-                        emit('world-event-record', record);
-                        emitDevicesEvent('world-event-record', record);
-                    }
-                }
-                current = newCurrent;
-            }
-            emitState();
+            simulator.setCurrent(newCurrent);
         });
 
         onEvent('world-reset', () => {
-            duration = 0;
-            current = 0;
-            scale = 1.0;
-            fps = 30;
-            isPaused = false;
-            app = undefined;
-            worldContext = undefined;
-            socketLike.app = undefined;
-            socketLike.worldContext = undefined;
-            records.splice(0, records.length);
-            if (tv) clearTimeout(tv);
-            tv = undefined;
-            emit('world-event-record-clear');
-            emitDevicesEvent('world-event-record-clear');
-            emitState();
+            simulator.reset();
         });
 
         onEvent('world-pause', () => {
-            isPaused = true;
-            if (tv) clearTimeout(tv);
-            tv = undefined;
-            emitState();
+            simulator.pause();
         });
 
         onEvent('world-resume', () => {
-            isPaused = false;
-            if (current < duration) {
-                for (let record of records) {
-                    if (record.time > current) {
-                        emit('world-event-record', record);
-                        emitDevicesEvent('world-event-record', record);
-                    }
-                }
-                current = duration;
-            }
-            if (app) {
-                if (tv) clearTimeout(tv);
-                tv = setTimeout(onUpdate, 0);
-            }
-            emitState();
+            simulator.resume();
         });
 
         onEvent('world-start', () => {
-            isPaused = false;
-            if (!app) {
-                onLoadApp();
-                if (tv) clearTimeout(tv);
-                tv = setTimeout(onUpdate, 0);
-            }
-            emitState();
+            simulator.start();
         });
 
         onEvent('world-send-event', (data) => {
 
             console.log('Received event from client:', data, socketLike.device);
-
-            if (!data || typeof data !== 'object') return;
-
-            const eventData = data as Record<string, unknown>;
-            if (typeof eventData.type !== 'string') return;
-
-            if (socketLike.device) {
-                for (let socket of socketSet) {
-                    if (socket.app && socket.worldContext) {
-                        const triggerEvent = { ...eventData, source: socket.worldContext } as IEvent<IObject>;
-                        let item: AppRecord = { time: duration, type: 'event', data: eventData as unknown as IEvent<IObject> };
-                        records.push(item);
-                        socket.app.trigger(triggerEvent);
-                        emit('world-event-record', item);
-                        emitDevicesEvent('world-event-record', item);
-                    }
-                }
-                return;
-            } else if (app && worldContext) {
-                const triggerEvent = { ...eventData, source: worldContext } as IEvent<IObject>;
-                let item: AppRecord = { time: duration, type: 'event', data: eventData as unknown as IEvent<IObject> };
-                records.push(item);
-                app.trigger(triggerEvent);
-                emit('world-event-record', item);
-                emitDevicesEvent('world-event-record', item);
-            }
-
+            simulator.sendEvent(data);
         });
 
         onEvent<{ type: string }>('world-device', (device) => {
@@ -663,12 +791,10 @@ export default function install(app: IApp, env: any) {
         });
 
         socketSet.add(socketLike);
+        simulator.attachSocket(socketLike);
 
         attachSocketDisconnect(socketLike, () => {
             socketSet.delete(socketLike);
-            if (tv) clearTimeout(tv);
-            tv = undefined;
-            app = undefined;
             for (const cleanup of cleanups) {
                 cleanup();
             }
