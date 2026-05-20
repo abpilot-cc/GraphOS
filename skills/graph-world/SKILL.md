@@ -386,15 +386,16 @@ Completion check:
 TypeScript example (implement EventSystem after Graph trigger chain is validated):
 
 ```ts
-import type { ChickenMergeLiteWorldContext, IChickenShootEvent } from './gen/World'; // graph auto-generated TypeScript types
+import type { WorldContext, IChickenShootEvent } from './gen/World'; // graph auto-generated TypeScript types
 import type { ISystem } from 'graphos-world-plugin';
 
-export type SpawnBulletOnShootEventSystem = ISystem<ChickenMergeLiteWorldContext, IChickenShootEvent>;
+export type SpawnBulletOnShootEventSystem = ISystem<WorldContext, IChickenShootEvent>;
 
 export function createSpawnBulletOnShootEventSystem(): SpawnBulletOnShootEventSystem {
    // optional internal cache for the System; not exposed to presentation layer
    return {
       handle(event: IChickenShootEvent): void {
+          const world = event.source as unknown as WorldContext;
          // TODO
       },
    };
