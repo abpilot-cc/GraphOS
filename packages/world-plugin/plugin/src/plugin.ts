@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import express from "express";
+import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "url";
 import { App, MemStorage, type AddEvent, type DelEvent, type GetEvent, type IEvent, type IEventSource, type IObject, type SetEvent } from "./index.js";
 import { genCocosCreator } from "./genCocosCreator.js";
@@ -389,6 +390,167 @@ export default function install(app: IApp, env: any) {
         let fps: number = 30;
         let isPaused: boolean = false;
         let records: AppRecord[] = [];
+        const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor as new (
+            ...args: string[]
+        ) => (...args: unknown[]) => Promise<unknown>;
+        const runtimeImportSuffixes = ["", ".js", "/index.js", ".mjs", "/index.mjs", ".cjs", "/index.cjs"];
+
+        const parseImportClause = (clause: string) => {
+            const trimmed = clause.trim();
+            let defaultImport: string | undefined;
+            let namespaceImport: string | undefined;
+            let namedImports: Array<{ imported: string; local: string }> = [];
+
+            const parseNamedImports = (value: string) => {
+                const inner = value.trim().replace(/^\{/, '').replace(/\}$/, '').trim();
+                if (!inner) return [] as Array<{ imported: string; local: string }>;
+                return inner
+                    .split(',')
+                    .map((part) => part.trim())
+                    .filter(Boolean)
+                    .map((part) => {
+                        const [importedRaw, localRaw] = part.split(/\s+as\s+/);
+                        const importedName = (importedRaw ?? '').trim();
+                        return {
+                            imported: importedName,
+                            local: (localRaw ?? importedName).trim(),
+                        };
+                    });
+            };
+
+            if (trimmed.startsWith('{')) {
+                namedImports = parseNamedImports(trimmed);
+                return { defaultImport, namespaceImport, namedImports };
+            }
+
+            if (trimmed.startsWith('* as ')) {
+                namespaceImport = trimmed.slice(5).trim();
+                return { defaultImport, namespaceImport, namedImports };
+            }
+
+            const commaIndex = trimmed.indexOf(',');
+            if (commaIndex === -1) {
+                defaultImport = trimmed;
+                return { defaultImport, namespaceImport, namedImports };
+            }
+
+            defaultImport = trimmed.slice(0, commaIndex).trim();
+            const rest = trimmed.slice(commaIndex + 1).trim();
+            if (rest.startsWith('{')) {
+                namedImports = parseNamedImports(rest);
+            } else if (rest.startsWith('* as ')) {
+                namespaceImport = rest.slice(5).trim();
+            }
+
+            return { defaultImport, namespaceImport, namedImports };
+        };
+
+        const transformRuntimeModuleSource = (source: string, filePath: string) => {
+            const exportNames: string[] = [];
+            const exportAliases: Array<{ local: string; exported: string }> = [];
+            const importPrelude: string[] = [];
+            let importIndex = 0;
+
+            const addExportName = (name: string) => {
+                if (!exportNames.includes(name)) {
+                    exportNames.push(name);
+                }
+            };
+
+            let transformed = source.replace(/^\s*import\s+([^;]+?)\s+from\s+['\"]([^'\"]+)['\"]\s*;?\s*$/gm, (_full, clause: string, specifier: string) => {
+                const moduleVar = `__module_${importIndex++}`;
+                const bindings = parseImportClause(clause);
+                const statements = [`const ${moduleVar} = await __loadModule(${JSON.stringify(specifier)}, __filename);`];
+
+                if (bindings.defaultImport) {
+                    statements.push(`const ${bindings.defaultImport} = Object.prototype.hasOwnProperty.call(${moduleVar}, "default") ? ${moduleVar}.default : ${moduleVar};`);
+                }
+
+                if (bindings.namespaceImport) {
+                    statements.push(`const ${bindings.namespaceImport} = ${moduleVar};`);
+                }
+
+                if (bindings.namedImports.length > 0) {
+                    const destructured = bindings.namedImports
+                        .map(({ imported, local }) => imported === local ? imported : `${imported}: ${local}`)
+                        .join(', ');
+                    statements.push(`const { ${destructured} } = ${moduleVar};`);
+                }
+
+                importPrelude.push(...statements);
+                return '';
+            });
+
+            transformed = transformed.replace(/^\s*import\s+['\"]([^'\"]+)['\"]\s*;?\s*$/gm, (_full, specifier: string) => {
+                importPrelude.push(`await __loadModule(${JSON.stringify(specifier)}, __filename);`);
+                return '';
+            });
+
+            transformed = transformed.replace(/export\s+default\s+function\s*(\w+)?\s*\(/g, (_full, name: string | undefined) => {
+                return `__exports.default = function ${name ?? ''}(`;
+            });
+
+            transformed = transformed.replace(/export\s+default\s+class\s+(\w+)/g, (_full, name: string) => {
+                return `__exports.default = class ${name}`;
+            });
+
+            transformed = transformed.replace(/export\s+default\s+/g, '__exports.default = ');
+
+            transformed = transformed.replace(/export\s+function\s+(\w+)\s*\(/g, (_full, name: string) => {
+                addExportName(name);
+                return `function ${name}(`;
+            });
+
+            transformed = transformed.replace(/export\s+class\s+(\w+)/g, (_full, name: string) => {
+                addExportName(name);
+                return `class ${name}`;
+            });
+
+            transformed = transformed.replace(/export\s+(const|let|var)\s+(\w+)/g, (_full, kind: string, name: string) => {
+                addExportName(name);
+                return `${kind} ${name}`;
+            });
+
+            transformed = transformed.replace(/export\s*\{([^}]*)\}\s*;?/g, (_full, names: string) => {
+                for (const part of names.split(',').map((value) => value.trim()).filter(Boolean)) {
+                    const [localRaw, exportedRaw] = part.split(/\s+as\s+/);
+                    const local = (localRaw ?? '').trim();
+                    exportAliases.push({
+                        local,
+                        exported: (exportedRaw ?? local).trim(),
+                    });
+                }
+                return '';
+            });
+
+            transformed = transformed.replace(/export\s*\{\s*\}\s*;?/g, '');
+
+            const exportAssignments = [
+                ...exportNames.map((name) => `__exports.${name} = ${name};`),
+                ...exportAliases.map(({ local, exported }) => `__exports.${exported} = ${local};`),
+            ];
+
+            return `${importPrelude.join('\n')}\n${transformed}\n${exportAssignments.join('\n')}\nreturn __exports;\n//# sourceURL=${pathToFileURL(filePath).href}`;
+        };
+
+        const resolveRuntimeModulePath = (specifier: string, importerPath: string) => {
+            if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
+                return null;
+            }
+
+            const basePath = specifier.startsWith('/')
+                ? specifier
+                : path.resolve(path.dirname(importerPath), specifier);
+
+            for (const suffix of runtimeImportSuffixes) {
+                const candidate = suffix ? `${basePath}${suffix}` : basePath;
+                if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                    return candidate;
+                }
+            }
+
+            return null;
+        };
 
         const syncSocketRefs = () => {
             for (const socket of socketSet) {
@@ -495,8 +657,41 @@ export default function install(app: IApp, env: any) {
 
             (async () => {
                 try {
-                    const url = pathToFileURL(entryPath).href;
-                    let loaded: any = await import(url);
+                    const moduleCache = new Map<string, Promise<Record<string, unknown>>>();
+                    const loadRuntimeModule = async (specifier: string, importerPath: string): Promise<Record<string, unknown>> => {
+                        const resolvedPath = resolveRuntimeModulePath(specifier, importerPath);
+                        if (!resolvedPath) {
+                            const required = createRequire(importerPath)(specifier);
+                            if (required && typeof required === 'object') {
+                                return required as Record<string, unknown>;
+                            }
+                            return { default: required };
+                        }
+
+                        const cached = moduleCache.get(resolvedPath);
+                        if (cached) {
+                            return cached;
+                        }
+
+                        const modulePromise = (async () => {
+                            const source = fs.readFileSync(resolvedPath, 'utf-8');
+                            const compiled = transformRuntimeModuleSource(source, resolvedPath);
+                            const exportsObject: Record<string, unknown> = {};
+                            const factory = new AsyncFunction('__loadModule', '__filename', '__dirname', '__exports', compiled);
+                            await factory(
+                                (childSpecifier: string, childImporterPath: string) => loadRuntimeModule(childSpecifier, childImporterPath),
+                                resolvedPath,
+                                path.dirname(resolvedPath),
+                                exportsObject,
+                            );
+                            return exportsObject;
+                        })();
+
+                        moduleCache.set(resolvedPath, modulePromise);
+                        return modulePromise;
+                    };
+
+                    let loaded: any = await loadRuntimeModule(entryPath, entryPath);
                     let entryFn: ((runtimeApp: App) => IEventSource<IObject>) | undefined;
                     while (loaded?.default) {
                         loaded = loaded.default;

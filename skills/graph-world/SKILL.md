@@ -98,7 +98,7 @@ npm i -D graphos-world-plugin graphos-cli
    "scripts": {
       "graphos": "graphos",
       "build": "tsc -p tsconfig.world.json",
-      "test:logic": "tsc -p tsconfig.world.json && node dist/test.js"
+      "test:logic": "tsx test.ts"
    }
 }
 ```
@@ -141,11 +141,11 @@ npm run build
 npm run test:logic
 ```
 
-## Logic Layer Test Harness (`src/test.ts`)
+## Logic Layer Test Harness (`test.ts`)
 
 Use this when you need to verify the logic layer in a headless, deterministic way without the UI.
 
-1. Create `src/test.ts` as the simulation entry point for logic validation.
+1. Create `test.ts` as the simulation entry point for logic validation.
    - Load the generated world/runtime types and register the same `System` / `EventSystem` wiring used by the app.
    - Run the logic layer against scripted scenarios that represent the main gameplay or business branches.
    - Keep the harness independent from rendering, DOM, canvas, and presentation-layer code.
@@ -167,12 +167,12 @@ Suggested `package.json` scripts for the harness:
 ```json
 {
    "scripts": {
-      "test:logic": "tsc -p tsconfig.world.json && node dist/test.js"
+      "test:logic": "tsx test.ts"
    }
 }
 ```
 
-Suggested `src/test.ts` responsibilities:
+Suggested `test.ts` responsibilities:
 
 ```ts
 // 1. bootstrap app/runtime
@@ -183,7 +183,7 @@ Suggested `src/test.ts` responsibilities:
 // 6. exit non-zero on failure
 ```
 
-Recommended `src/test.ts` initialization example:
+Recommended `test.ts` initialization example:
 
 ```ts
 import { App, MemStorage } from 'graphos-world-plugin'; // Do not modify this fixed access pattern.
