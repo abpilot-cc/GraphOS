@@ -75,9 +75,9 @@ npm i -D graphos-world-plugin graphos-cli
 {
   "scripts": {
     "graphos": "graphos",
-    "wasm:build": "wasm-pack build . --target web --release --out-dir pkg",
-    "wasm:build:bundler": "wasm-pack build . --target bundler --release --out-dir pkg",
-    "wasm:build:node": "wasm-pack build . --target nodejs --release --out-dir pkg",
+    "build:wasm": "wasm-pack build . --target web --release --out-dir dist",
+    "build:wasm:bundler": "wasm-pack build . --target bundler --release --out-dir dist",
+    "build:wasm:node": "wasm-pack build . --target nodejs --release --out-dir dist",
 
     "build:ios:arm64": "cargo build --release --target aarch64-apple-ios",
     "build:ios:x86_64": "cargo build --release --target x86_64-apple-ios",
@@ -110,7 +110,7 @@ npm i -D graphos-world-plugin graphos-cli
 
 ```bash
 npm run graphos -- --help
-npm run wasm:build
+npm run build:wasm
 npm run build:macos:arm64
 ```
 
