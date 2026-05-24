@@ -155,6 +155,22 @@ Rules:
 
 ### Step 3: Minimal runtime app (no renderer)
 
+Before wiring systems, initialize base source files for generated modules.
+
+`src/gen/mod.ts`:
+
+```ts
+// This is auto-generated code.
+```
+
+`src/lib.rs`:
+
+```rust
+pub mod r#gen;
+```
+
+Then implement runtime entry logic.
+
 `src/main.rs` example:
 
 ```rust
