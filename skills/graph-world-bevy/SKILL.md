@@ -1,7 +1,7 @@
 ---
 name: graph-world-bevy
 description: 'Rust + Bevy (headless app/ecs/time only) implementation workflow for GraphOS world projects. Use after graph-world closes graph design, then bootstrap GraphOS project files and initialize a Rust runtime without Bevy rendering stack.'
-argument-hint: 'Describe your Bevy world task, e.g. "bootstrap GraphOS + Rust bevy_app/bevy_ecs/bevy_time project and create World bootstrap systems"'
+argument-hint: 'Describe your Bevy world task, e.g. "bootstrap GraphOS + Rust bevy_app/bevy_ecs/bevy_time project in current directory and create World bootstrap systems"'
 user-invocable: true
 ---
 
@@ -63,21 +63,34 @@ npm i -D graphos-world-plugin graphos-cli
       "genBevy": {
         "enabled": true,
         "outDir": "src/gen"
-      },
+      }
     }
   }
 }
 ```
 
-3. Ensure `package.json` scripts includes GraphOS commands only:
+3. Ensure `package.json` scripts includes GraphOS, wasm, and cross-compile commands:
 
 ```json
 {
   "scripts": {
     "graphos": "graphos",
-    "wasm:build": "wasm-pack build ./world-runtime --target web --release --out-dir pkg",
-    "wasm:build:bundler": "wasm-pack build ./world-runtime --target bundler --release --out-dir pkg",
-    "wasm:build:node": "wasm-pack build ./world-runtime --target nodejs --release --out-dir pkg"
+    "wasm:build": "wasm-pack build . --target web --release --out-dir pkg",
+    "wasm:build:bundler": "wasm-pack build . --target bundler --release --out-dir pkg",
+    "wasm:build:node": "wasm-pack build . --target nodejs --release --out-dir pkg",
+
+    "build:ios:arm64": "cargo build --release --target aarch64-apple-ios",
+    "build:ios:x86_64": "cargo build --release --target x86_64-apple-ios",
+    "build:ios:arm64_sim": "cargo build --release --target aarch64-apple-ios-sim",
+
+    "build:android:armv7": "cargo ndk -t armeabi-v7a build --release",
+    "build:android:arm64": "cargo ndk -t arm64-v8a build --release",
+
+    "build:macos:x86_64": "cargo build --release --target x86_64-apple-darwin",
+    "build:macos:arm64": "cargo build --release --target aarch64-apple-darwin",
+
+    "build:windows:x86_64": "cargo zigbuild --release --target x86_64-pc-windows-gnu",
+    "build:linux:x86_64": "cargo zigbuild --release --target x86_64-unknown-linux-gnu"
   }
 }
 ```
@@ -98,6 +111,7 @@ npm i -D graphos-world-plugin graphos-cli
 ```bash
 npm run graphos -- --help
 npm run wasm:build
+npm run build:macos:arm64
 ```
 
 Completion checks:
@@ -105,17 +119,20 @@ Completion checks:
 - Graph file exists.
 - No TypeScript build/runtime files are required by this skill.
 - wasm-pack build scripts are available in `package.json`.
+- Cross-compile scripts exist for iOS/Android/macOS/Windows/Linux targets.
 
 ## Rust + Bevy Initialization (Latest, Headless)
 
 Goal: initialize a Rust runtime that uses Bevy ECS/time scheduling only.
 
-### Step 1: Initialize Rust crate
+### Step 1: Initialize Rust crate in current directory
 
 ```bash
-cargo new world-runtime --bin
-cd world-runtime
+# Run this in the project root directory.
+cargo init --bin .
 ```
+
+If a Cargo project already exists in the current directory, skip this step.
 
 ### Step 2: Add Bevy runtime dependencies (no rendering)
 
@@ -183,7 +200,7 @@ rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
 ```
 
-2. Ensure `world-runtime/Cargo.toml` exposes cdylib:
+2. Ensure root `Cargo.toml` exposes cdylib:
 
 ```toml
 [lib]
@@ -202,7 +219,7 @@ npm run wasm:build:node
 4. Optional direct command:
 
 ```bash
-wasm-pack build ./world-runtime --target web --release --out-dir pkg
+wasm-pack build . --target web --release --out-dir pkg
 ```
 
 Completion checks:
@@ -211,6 +228,64 @@ Completion checks:
 - Time resource updates normally.
 - No Bevy render/window/UI modules are linked.
 - `pkg/` contains wasm-pack artifacts (`.wasm`, JS glue, package metadata).
+
+### Step 6: Cross-compile setup on macOS
+
+1. Install Rust targets:
+
+```bash
+rustup target add \
+  aarch64-apple-ios \
+  x86_64-apple-ios \
+  aarch64-apple-ios-sim \
+  armv7-linux-androideabi \
+  aarch64-linux-android \
+  x86_64-apple-darwin \
+  aarch64-apple-darwin \
+  x86_64-pc-windows-gnu \
+  x86_64-unknown-linux-gnu
+```
+
+2. Install cross-compile helpers:
+
+```bash
+brew install zig
+cargo install cargo-zigbuild
+cargo install cargo-ndk
+```
+
+3. Configure Android NDK (required by `cargo ndk`):
+
+```bash
+export ANDROID_NDK_HOME=/path/to/android-ndk
+export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+```
+
+4. Run platform builds:
+
+```bash
+# iOS
+npm run build:ios:arm64
+npm run build:ios:x86_64
+npm run build:ios:arm64_sim
+
+# Android
+npm run build:android:armv7
+npm run build:android:arm64
+
+# macOS
+npm run build:macos:x86_64
+npm run build:macos:arm64
+
+# Windows / Linux (cross on macOS via zig)
+npm run build:windows:x86_64
+npm run build:linux:x86_64
+```
+
+Output notes:
+- Rust artifacts are generated under `target/<triple>/release/`.
+- Android `cargo ndk` outputs ABI-specific artifacts for `armeabi-v7a` and `arm64-v8a`.
+- For iOS universal libs, combine device/simulator outputs later with Xcode tooling as needed.
 
 ## GraphOS Integration Notes for Rust Runtime
 
@@ -227,6 +302,7 @@ Completion checks:
 4. Minimal-runtime gate: app, ecs, time capabilities are present and verified.
 5. Build gate: `cargo check` succeeds for the Rust runtime crate.
 6. wasm gate: `wasm-pack build` succeeds and outputs package files.
+7. cross-compile gate: all required target scripts complete successfully on macOS toolchain.
 
 ## Failure Recovery
 
@@ -239,7 +315,13 @@ Completion checks:
 - `wasm-pack` build fails due to missing wasm target:
   run `rustup target add wasm32-unknown-unknown` and retry.
 - `wasm-pack` build fails because crate type is not compatible:
-  add `[lib] crate-type = ["cdylib", "rlib"]` to `world-runtime/Cargo.toml`.
+  add `[lib] crate-type = ["cdylib", "rlib"]` to root `Cargo.toml`.
+- Android build fails with NDK not found:
+  set `ANDROID_NDK_HOME` and `ANDROID_NDK_ROOT`, then rerun `cargo ndk` scripts.
+- Windows/Linux cross compile fails on macOS linker:
+  install `zig` and use `cargo zigbuild` scripts (do not use plain `cargo build` for those targets).
+- iOS build fails due to missing target:
+  run `rustup target add <ios-target>` and retry.
 - Request needs graph topology change:
   pause Rust edits and switch back to `graph-world` first.
 
