@@ -1,6 +1,6 @@
 ---
 name: graph-world
-description: 'World logic design tool for GraphOS. Design World/Context/Variant/System/Event/EventSystem graph models for any game or app, focusing on domain logic, lifecycle systems, bootstrap events, and event-driven context initialization. Depends on graph-management skill for graph read/apply APIs.'
+description: 'World logic design tool for GraphOS. Design World/Context/Variant/System/Event/EventSystem graph models for any game or app, focusing on domain logic, lifecycle systems, bootstrap events, and event-driven context initialization. Depends on graph-management for graph read/apply APIs and graph-world-ts for TypeScript implementation work.'
 argument-hint: 'Describe your domain and goals, e.g. "Any game or app world model with contexts, variants, systems, and bootstrap initialization"'
 user-invocable: true
 ---
@@ -10,6 +10,8 @@ user-invocable: true
 Design world logic in GraphOS with a node-first architecture for any game or application.
 
 This skill depends on `graph-management` for graph inspection and transaction apply APIs.
+
+Use `graph-world-ts` after graph validation is complete whenever the task moves into npm/TypeScript project bootstrap, generated code integration, or runtime implementation of Systems and EventSystems.
 
 ## Node Semantics
 
@@ -41,7 +43,6 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 - You need to convert business domains into nested Context trees.
 - You need typed data variables (Variant) before writing lifecycle logic.
 - You need event-driven initialization or runtime flows (for example game startup).
-- You need to bootstrap a fresh npm + TypeScript world project with GraphOS generation config.
 
 ## Preconditions
 
@@ -49,95 +50,6 @@ This skill depends on `graph-management` for graph inspection and transaction ap
 2. Read available node types and current graph state before mutation.
 3. Use one coherent transaction per design step when possible.
 4. Enforce root naming constraint: the `World` node `name` is fixed to `'World'`.
-
-## Project Bootstrap (npm + TypeScript)
-
-Use this when the user asks to initialize a new world logic project.
-
-1. Initialize npm project and install TypeScript + Node typings:
-
-```bash
-npm init -y
-npm i -D typescript @types/node
-```
-
-2. Install `graphos-world-plugin` and `graphos-cli` as dev dependencies:
-
-```bash
-npm i -D graphos-world-plugin graphos-cli
-```
-
-3. Ensure `package.json` contains the following `graphos` config:
-
-```json
-{
-   "type": "module",
-   "graphos": {
-      "world": {
-         "genTypeScript": {
-            "enabled": true,
-            "outDir": "gen"
-         },
-         "genWebTypeScript": {
-            "enabled": true,
-            "outDir": "app"
-         },
-         "genCocosCreator": {
-            "enabled": false,
-            "outDir": "../cocos/assets/gen"
-         }
-      }
-   }
-}
-```
-
-4. Ensure `package.json` scripts includes:
-
-```json
-{
-   "scripts": {
-      "graphos": "graphos",
-      "build": "tsc -p tsconfig.world.json"
-   }
-}
-```
-
-5. Ensure root `tsconfig.world.json` exists (minimal example):
-
-```json
-{
-   "compilerOptions": {
-      "target": "ES2020",
-      "module": "ESNext",
-      "moduleResolution": "Bundler",
-      "strict": true,
-      "esModuleInterop": true,
-      "forceConsistentCasingInFileNames": true,
-      "skipLibCheck": true,
-      "outDir": "dist"
-   },
-   "include": ["src/**/*.ts","gen/**/*.ts"],
-   "exclude": ["node_modules", "dist"]
-}
-```
-
-6. Create `World.graph.json` in the project root as the initial empty graph:
-
-```json
-{
-  "id": "main",
-  "name": "World",
-  "nodes": [],
-  "edges": []
-}
-```
-
-7. Optional verification:
-
-```bash
-npm run graphos -- --help
-npm run build
-```
 
 ## Simulator Log Inspection
 
@@ -253,82 +165,8 @@ Completion check:
 - Systems are attached to the correct World/Context scope.
 - No lifecycle method exists without a clear trigger and data target.
 
-TypeScript example (implement System after Graph is validated):
-
-```ts
-import type { GameplayContext } from './gen/World'; // graph auto-generated TypeScript types
-import type { ISystem } from 'graphos-world-plugin';
-
-export function createGameBootstrapSystem(): ISystem<GameplayContext> {
-   // optional internal cache for the System; not exposed to presentation layer
-   return {
-      spawn(ctx: GameplayContext): void {
-         // TODO
-      },
-      despawn(ctx: GameplayContext): void {
-         // TODO
-      },
-      update(ctx: GameplayContext, deltaTime: number): void {
-         // TODO
-      },
-      change(ctx: GameplayContext): void {
-         // TODO
-      },
-   };
-}
-```
-
-Implementation guidance:
-- Keep method behavior aligned with the closure checks in Step 4.
-- Do not implement business logic before Graph data model and ownership are finalized.
-- If Graph changes update generated context types, regenerate types first, then update this System implementation.
-- Keep presentation behavior outside `System`; the View layer should react by observing `Context` data changes.
-- Intermediate cache should be handled privately inside each `System` and should not leak into presentation concerns.
-- Do not add a mandatory `.js` suffix rule for TypeScript `import from` paths; follow the project's existing import style instead of forcing `.js` path rewriting in generated code examples.
-- Do not create module-level or global cache/state for `System` implementations.
-- Any cache must live inside the `create...System` factory function scope (closure) so each created system instance owns its own cache.
-- Put shared data contracts, constants, and Context singleton ids/names used by generated `System` code into `src/types.ts`, then import them from `System` files.
-- Put runtime configuration into `src/config.ts` and read it from generated `System` logic; prefer configurable defaults over hard-coded values.
-- When generating `System` code files, use PascalCase file names and keep them exactly aligned with the graph `System` node `name`.
-- Example: graph node `GameBootstrapSystem` -> file `GameBootstrapSystem.ts`.
-- Since `Context` provides storage capability, implement a get-or-create pattern in `System` logic: fetch existing Context/state first, and create/initialize only when missing.
-- For singleton `Context` access in `System` implementations, use a fixed id with `get...ById('id')`.
-- Do not fetch singleton `Context` instances through positional access such as `get...Children()[0]`, because order-based lookup is unstable and obscures identity.
-- After implementing a `System`, register it in `src/app.ts` with `app.addSystem(...)`; generated code is not complete until runtime registration is wired.
-
-### World Startup Entry Design (Mandatory)
-
-Goal: define a clear and deterministic startup entry for world logic initialization.
-
-You must implement the following startup pattern:
-
-1. Initialize required `Context` in a `System.spawn` mounted under `World`.
-   - Add a bootstrap system node under `World` (for example `WorldBootstrapSystem`).
-   - In `spawn`, initialize the required root/domain Context instances using get-or-create semantics.
-   - Keep initialization idempotent: repeated `spawn` calls must not create duplicate singleton Context data.
-
-Startup responsibility:
-- `System.spawn`: baseline/default world Context bootstrap that should exist before runtime flows.
-
-TypeScript example (`System.spawn` for baseline initialization):
-
-```ts
-import type { ISystem } from 'graphos-world-plugin';
-import { WorldContext } from '../gen/World';
-
-export function createWorldBootstrapSystem(): ISystem<WorldContext> {
-   return {
-      spawn(ctx: WorldContext): void {
-         // get-or-create required singleton contexts here
-         // e.g. ctx.getGameplayById('gameplay') ?? ctx.createGameplay({ id: 'gameplay' })
-      },
-   };
-}
-```
-
-Required registration wiring in `src/app.ts`:
-- Register the World bootstrap system with `app.addSystem(WorldContext.Table, createWorldBootstrapSystem())`.
-- Ensure bootstrap initialization remains idempotent and safe on retry/re-entry.
+Implementation handoff:
+- After Step 4 passes, use `graph-world-ts` to implement concrete TypeScript `System` code, startup bootstrap wiring, generated type integration, and `src/app.ts` registration.
 
 ### Step 3: Define Events and EventSystems
 
@@ -354,64 +192,8 @@ Completion check:
 - Every Event has at least one intended EventSystem handler (or explicitly documented as future work).
 - Event payload Variants match handler input expectations.
 
-TypeScript example (implement EventSystem after Graph trigger chain is validated):
-
-```ts
-import type { WorldContext, IChickenShootEvent } from './gen/World'; // graph auto-generated TypeScript types
-import type { ISystem } from 'graphos-world-plugin';
-
-export type SpawnBulletOnShootEventSystem = ISystem<WorldContext, IChickenShootEvent>;
-
-export function createSpawnBulletOnShootEventSystem(): SpawnBulletOnShootEventSystem {
-   // optional internal cache for the System; not exposed to presentation layer
-   return {
-      handle(event: IChickenShootEvent): void {
-          const world = event.source as unknown as WorldContext;
-         // TODO
-      },
-   };
-}
-```
-
-Implementation guidance:
-- Ensure Event payload fields are defined in Graph and match `IChickenShootEvent`.
-- For events consumed mainly by the presentation/UI layer, prefer signal-style Events with no payload; add fields only when the UI cannot derive the required state from `Context`.
-- Keep `handle` side effects scoped to the owning Context and verified by Step 4 trigger closure.
-- If Event or payload schema changes in Graph, regenerate `./gen/World` types before updating EventSystem code.
-- Do not require `.js` suffixes in TypeScript `import from` paths unless the target project already uses that convention; generated EventSystem examples should preserve the repo's native import style.
-- Do not create module-level or global cache/state for `EventSystem` implementations.
-- Any cache must live inside the `create...EventSystem` factory function scope (closure) so each created event-system instance owns its own cache.
-- Put shared data contracts, constants, and Context singleton ids/names used by generated `EventSystem` code into `src/types.ts`, then import them from `EventSystem` files.
-- Put runtime configuration into `src/config.ts` and read it from generated `EventSystem` logic; prefer configurable defaults over hard-coded values.
-- When generating `EventSystem` code files, use PascalCase file names and keep them exactly aligned with the graph `EventSystem` node `name`.
-- Example: graph node `SpawnBulletOnShootEventSystem` -> file `SpawnBulletOnShootEventSystem.ts`.
-- Since `Context` provides storage capability, `EventSystem` handlers should fetch target Context/state first and create/initialize only when it does not exist.
-- For singleton `Context` access in `EventSystem` implementations, use a fixed id with `get...ById('id')`.
-- Do not resolve singleton `Context` instances through `get...Children()[0]` or any other position-based child lookup.
-- After implementing an `EventSystem`, register it in `src/app.ts` with `app.addEventSystem(...)`; event handlers are incomplete until the app entry wires them.
-
-Application registration example (`src/app.ts`):
-
-```ts
-import { App } from 'graphos-world-plugin';
-import { MatchLoopContext, WorldContext } from '../gen/World';
-import { createMatchLifecycleSystem } from './MatchLifecycleSystem';
-import { createApplyConfigHotReloadEventSystem } from './ApplyConfigHotReloadEventSystem';
-
-export default function (app: App): WorldContext {
-   app.addSystem(MatchLoopContext.Table, createMatchLifecycleSystem());
-   app.addEventSystem('ConfigHotReloadRequested', createApplyConfigHotReloadEventSystem());
-   return WorldContext.default(app.ctx, app.cache)!;
-}
-```
-
-Registration guidance:
-- Register every generated `System` and `EventSystem` in `src/app.ts`.
-- Keep imported symbol names aligned with the generated PascalCase file names and graph node names.
-- Do not enforce adding `.js` to `import from` paths in `src/app.ts`; keep imports consistent with the surrounding TypeScript project style.
-- Use the owning Context table when calling `app.addSystem(...)`.
-- Use the exact graph `Event` name when calling `app.addEventSystem(...)`.
-- Keep the `src/app.ts` default export signature fixed as `export default function (app: App): WorldContext`; this format is mandatory and must not be changed.
+Implementation handoff:
+- After Graph trigger chains are validated, use `graph-world-ts` to implement concrete TypeScript `EventSystem` handlers, regenerate `./gen/World` types, and wire registrations in `src/app.ts`.
 
 ### Step 4: Closed-Loop Validation and Completion
 

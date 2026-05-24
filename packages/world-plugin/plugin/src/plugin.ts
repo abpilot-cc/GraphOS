@@ -486,6 +486,40 @@ export default function install(app: IApp, env: any) {
                 return '';
             });
 
+            transformed = transformed.replace(/^\s*export\s*\{([^}]*)\}\s*from\s+['\"]([^'\"]+)['\"]\s*;?\s*$/gm, (_full, names: string, specifier: string) => {
+                const moduleVar = `__module_${importIndex++}`;
+                importPrelude.push(`const ${moduleVar} = await __loadModule(${JSON.stringify(specifier)}, __filename);`);
+
+                for (const part of names.split(',').map((value) => value.trim()).filter(Boolean)) {
+                    const [importedRaw, exportedRaw] = part.split(/\s+as\s+/);
+                    const imported = (importedRaw ?? '').trim();
+                    const exported = (exportedRaw ?? imported).trim();
+                    exportAliases.push({
+                        local: `${moduleVar}.${imported}`,
+                        exported,
+                    });
+                }
+
+                return '';
+            });
+
+            transformed = transformed.replace(/^\s*export\s+\*\s+from\s+['\"]([^'\"]+)['\"]\s*;?\s*$/gm, (_full, specifier: string) => {
+                const moduleVar = `__module_${importIndex++}`;
+                importPrelude.push(`const ${moduleVar} = await __loadModule(${JSON.stringify(specifier)}, __filename);`);
+                importPrelude.push(`Object.assign(__exports, ${moduleVar});`);
+                return '';
+            });
+
+            transformed = transformed.replace(/^\s*export\s+\*\s+as\s+(\w+)\s+from\s+['\"]([^'\"]+)['\"]\s*;?\s*$/gm, (_full, exported: string, specifier: string) => {
+                const moduleVar = `__module_${importIndex++}`;
+                importPrelude.push(`const ${moduleVar} = await __loadModule(${JSON.stringify(specifier)}, __filename);`);
+                exportAliases.push({
+                    local: moduleVar,
+                    exported,
+                });
+                return '';
+            });
+
             transformed = transformed.replace(/export\s+default\s+function\s*(\w+)?\s*\(/g, (_full, name: string | undefined) => {
                 return `__exports.default = function ${name ?? ''}(`;
             });
@@ -657,7 +691,14 @@ export default function install(app: IApp, env: any) {
 
             (async () => {
                 try {
-                    const moduleCache = new Map<string, Promise<Record<string, unknown>>>();
+                    type RuntimeModuleRecord = {
+                        exportsObject: Record<string, unknown>;
+                        loaded: boolean;
+                        error?: unknown;
+                        promise: Promise<void>;
+                    };
+
+                    const moduleCache = new Map<string, RuntimeModuleRecord>();
                     const loadRuntimeModule = async (specifier: string, importerPath: string): Promise<Record<string, unknown>> => {
                         const resolvedPath = resolveRuntimeModulePath(specifier, importerPath);
                         if (!resolvedPath) {
@@ -670,13 +711,37 @@ export default function install(app: IApp, env: any) {
 
                         const cached = moduleCache.get(resolvedPath);
                         if (cached) {
-                            return cached;
+                            if (cached.error !== undefined) {
+                                throw cached.error;
+                            }
+
+                            // Break circular imports by returning the shared exports object
+                            // while the first evaluation is still in progress.
+                            if (!cached.loaded) {
+                                return cached.exportsObject;
+                            }
+
+                            await cached.promise;
+                            return cached.exportsObject;
                         }
 
-                        const modulePromise = (async () => {
+                        const exportsObject: Record<string, unknown> = {};
+                        let resolveModule!: () => void;
+                        let rejectModule!: (error: unknown) => void;
+                        const moduleRecord: RuntimeModuleRecord = {
+                            exportsObject,
+                            loaded: false,
+                            promise: new Promise<void>((resolve, reject) => {
+                                resolveModule = resolve;
+                                rejectModule = reject;
+                            }),
+                        };
+
+                        moduleCache.set(resolvedPath, moduleRecord);
+
+                        try {
                             const source = fs.readFileSync(resolvedPath, 'utf-8');
                             const compiled = transformRuntimeModuleSource(source, resolvedPath);
-                            const exportsObject: Record<string, unknown> = {};
                             const factory = new AsyncFunction('__loadModule', '__filename', '__dirname', '__exports', compiled);
                             await factory(
                                 (childSpecifier: string, childImporterPath: string) => loadRuntimeModule(childSpecifier, childImporterPath),
@@ -684,11 +749,14 @@ export default function install(app: IApp, env: any) {
                                 path.dirname(resolvedPath),
                                 exportsObject,
                             );
+                            moduleRecord.loaded = true;
+                            resolveModule();
                             return exportsObject;
-                        })();
-
-                        moduleCache.set(resolvedPath, modulePromise);
-                        return modulePromise;
+                        } catch (error) {
+                            moduleRecord.error = error;
+                            rejectModule(error);
+                            throw error;
+                        }
                     };
 
                     let loaded: any = await loadRuntimeModule(entryPath, entryPath);
@@ -971,8 +1039,7 @@ export default function install(app: IApp, env: any) {
         });
 
         onEvent('world-send-event', (data) => {
-
-            console.log('Received event from client:', data, socketLike.device);
+            // console.log('Received event from client:', data, socketLike.device);
             simulator.sendEvent(data);
         });
 

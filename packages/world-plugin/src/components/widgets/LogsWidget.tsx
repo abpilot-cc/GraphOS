@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { useClient } from '@/src/Client';
 
 const formatTime = (seconds: number) => {
@@ -26,6 +24,15 @@ export function LogsWidget() {
 
   return (
     <div className="h-full flex flex-col bg-transparent p-0" id="logs-widget">
+      <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/80">
+        <input
+          type="text"
+          value={client.logKeyword}
+          onChange={(event) => client.setLogKeyword(event.target.value)}
+          placeholder="Filter by type or data"
+          className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+        />
+      </div>
       <div className="flex-1 overflow-auto custom-scrollbar" id="logs-table-container">
         <table className="w-full text-left border-collapse border-spacing-0" id="logs-table">
           <thead className="sticky top-0 bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-md z-10">
@@ -56,6 +63,13 @@ export function LogsWidget() {
                 </td>
               </tr>
             ))}
+            {client.records.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-xs text-zinc-400 dark:text-zinc-500">
+                  No logs match the current filter.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -22,6 +22,8 @@ export type ClientContextValue = {
     state: ClientState;
     graph: IGraph | null;
     records: AppRecord[];
+    logKeyword: string;
+    setLogKeyword: (keyword: string) => void;
     tables: ITable[];
     objectSet: Map<string, [IObject[], Map<string, IObject>]>
     focusObject: [IObject, string] | null;
@@ -67,6 +69,19 @@ type AppRecord = {
     id: number;
 };
 
+const MAX_VISIBLE_RECORDS = 20;
+
+const matchesLogKeyword = (item: AppRecord, keyword: string) => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+
+    if (!normalizedKeyword) {
+        return true;
+    }
+
+    return item.type.toLowerCase().includes(normalizedKeyword)
+        || JSON.stringify(item.data).toLowerCase().includes(normalizedKeyword);
+};
+
 const ClientContext = createContext<ClientContextValue | undefined>(undefined);
 
 let autoId = 0;
@@ -76,11 +91,20 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     const [isConnected, setIsConnected] = useState(false);
     const [state, setState] = useState<ClientState>({ duration: 0, current: 0, state: 'stopped', scale: 1.0, fps: 30 });
     const [graph, setGraph] = useState<IGraph | null>(null);
-    const [records, setRecords] = useState<AppRecord[]>([]);
+    const [allRecords, setAllRecords] = useState<AppRecord[]>([]);
+    const [logKeyword, setLogKeyword] = useState('');
     const [objectSet,] = useState<Map<string, [IObject[], Map<string, IObject>]>>(new Map());
     const [tables, setTables] = useState<ITable[]>([]);
     const [focusObject, setFocusObject] = useState<[IObject, string] | null>(null);
     const [devices, setDevices] = useState<IDevice[]>([]);
+
+    const records = useMemo(() => {
+        if (!logKeyword.trim()) {
+            return allRecords.slice(0, MAX_VISIBLE_RECORDS);
+        }
+
+        return allRecords.filter((item) => matchesLogKeyword(item, logKeyword));
+    }, [allRecords, logKeyword]);
 
     const emit = (type: string, payload?: unknown) => {
         if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -170,15 +194,15 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                     const data = envelope.payload as AppRecord;
                     window.dispatchEvent(new CustomEvent('world-event-record', { detail: data }));
                     data.id = ++autoId;
-                    setRecords((prevRecords) => {
+                    setAllRecords((prevRecords) => {
                         if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
-                            return [data, ...prevRecords.slice(0, 19)];
+                            return [data, ...prevRecords];
                         }
                         if (data.type === 'set') {
                             Object.assign(prevRecords[0].data, data.data);
                             return [...prevRecords];
                         }
-                        return [data, ...prevRecords.slice(1, 19)];
+                        return [data, ...prevRecords.slice(1)];
                     });
                     if (data.type !== 'event') {
                         let object = data.data as IObject;
@@ -243,7 +267,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
 
                 if (envelope.type === 'world-event-record-clear') {
                     window.dispatchEvent(new CustomEvent('world-event-record-clear', {}));
-                    setRecords([]);
+                    setAllRecords([]);
                     objectSet.clear();
                     setFocusObject(null);
                     setTables((prevTables) => {
@@ -297,8 +321,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         };
     }, [objectSet]);
 
-    const value = useMemo<ClientContextValue>(() => ({ socket, emit, isConnected, state: state, graph: graph, records: records, tables: tables, objectSet: objectSet, focusObject, setFocusObject, devices }),
-        [socket, isConnected, state, graph, records, tables, objectSet, focusObject, devices]);
+    const value = useMemo<ClientContextValue>(() => ({ socket, emit, isConnected, state: state, graph: graph, records: records, logKeyword, setLogKeyword, tables: tables, objectSet: objectSet, focusObject, setFocusObject, devices }),
+        [socket, isConnected, state, graph, records, logKeyword, tables, objectSet, focusObject, devices]);
 
     return React.createElement(ClientContext.Provider, { value }, children);
 }
