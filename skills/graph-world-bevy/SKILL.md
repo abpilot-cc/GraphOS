@@ -679,6 +679,7 @@ When implementing or fixing Systems/EventSystems, use the simulator API to verif
 
 ### Key constraints
 
+- Do not use `cargo run` for simulation log verification. `cargo run` launches a native binary that does not integrate with the GraphOS simulator API (`/api/world/*`). All log verification must go through the simulator API via `npm run build:wasm:node` + HTTP endpoints.
 - Do not use the skill reference implementation's wasm for simulation. The simulator runs the project's own wasm built from the current workspace; verify via the project's `npm run build:wasm:node`, not by running the skill's `src/app/` reference code directly.
 - Never restart the GraphOS service to pick up wasm changes; `npm run build:wasm:node` + `POST /api/world/reset` then `POST /api/world/start` is sufficient.
 - After `npm run build:wasm:node` succeeds, immediately verify through the simulator API before declaring the fix complete.
