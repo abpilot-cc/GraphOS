@@ -26,6 +26,14 @@ function generateCode(graph: IGraph): string {
     type RustIntType = "u8" | "u16" | "u32" | "u64" | "usize" | "i8" | "i16" | "i32" | "i64" | "isize";
     type RustFloatType = "f32" | "f64";
     type RustNumericType = RustIntType | RustFloatType;
+    const rustKeywords = new Set([
+        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn",
+        "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
+        "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type",
+        "unsafe", "use", "where", "while", "async", "await", "dyn", "abstract", "become",
+        "box", "do", "final", "macro", "override", "priv", "typeof", "unsized", "virtual",
+        "yield", "try",
+    ]);
 
     const nodeMap = new Map<string, GraphNode>(graph.nodes.map((node) => [node.id, node]));
     const contextNodes = graph.nodes.filter((node) => node.type === "Context" || node.type === "World");
@@ -96,7 +104,8 @@ function generateCode(graph: IGraph): string {
             .replace(/[^a-zA-Z0-9]+/g, "_")
             .replace(/^_+|_+$/g, "")
             .toLowerCase();
-        return s || "value";
+        const normalized = s || "value";
+        return rustKeywords.has(normalized) ? `r#${normalized}` : normalized;
     };
 
     const ensureUniqueTypeName = (baseName: string): string => {

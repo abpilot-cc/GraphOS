@@ -210,6 +210,40 @@ cargo run
 
 ## Workflow
 
+### File Organization Rules (Mandatory)
+
+Every graph `System` and `EventSystem` MUST follow these rules with no exceptions:
+
+1. **One file per System/EventSystem** — each System or EventSystem lives in its own `.rs` file. Never put multiple Systems/EventSystems in the same file.
+2. **File naming: lowercase + underscores (snake_case)** — match the graph node name converted to snake_case. Example: graph node `StartGameEventSystem` → file `start_game_event_system.rs`.
+3. **Directory: `src/app/`** — all System and EventSystem implementation files go under `src/app/`. Do not place them in `src/gen/`, `src/core/`, or any other directory.
+4. **Registration: `src/app/mod.rs`** — every System/EventSystem module must be declared (`pub mod ...`) and its `reg(app)` called inside `src/app/mod.rs`. No implicit or auto-registration.
+
+Directory layout example:
+
+```text
+src/
+  app/
+    mod.rs                       # declares all modules + calls reg(app) for each
+    world_bootstrap_system.rs    # System: WorldBootstrapSystem
+    game_system.rs               # System: GameSystem
+    scene_system.rs              # System: SceneSystem (if needed)
+    start_game_event_system.rs   # EventSystem: StartGameEventSystem
+  gen/
+    mod.rs
+    world.rs                     # generated — never edit
+  core/
+    mod.rs
+    context.rs
+  lib.rs
+  main.rs
+```
+
+When adding a new System/EventSystem:
+1. Create `src/app/<snake_case_name>.rs`
+2. Add `pub mod <snake_case_name>;` to `src/app/mod.rs`
+3. Add `<snake_case_name>::reg(app);` inside the `reg()` function in `src/app/mod.rs`
+
 ### Step 1: Sync Graph Output Into Rust
 
 1. Confirm Graph changes are complete and validated in `graph-world`.
@@ -223,6 +257,8 @@ Completion checks:
 ### Step 2: Implement Systems In `src/app/`
 
 Implement concrete lifecycle `System` behavior under `src/app/` after Graph ownership is finalized.
+
+**Follow the [File Organization Rules](#file-organization-rules-mandatory) strictly.** Each graph System gets its own file in `src/app/`, named in snake_case, and registered in `src/app/mod.rs`.
 
 Recommended layout:
 
@@ -360,6 +396,8 @@ Startup guidance:
 ### Step 4: Implement EventSystems In `src/app/`
 
 Implement graph `EventSystem` handlers as Bevy observers over generated events.
+
+**Follow the [File Organization Rules](#file-organization-rules-mandatory) strictly.** Each EventSystem gets its own file in `src/app/`, named in snake_case (e.g. `StartGameEventSystem` → `start_game_event_system.rs`), and registered in `src/app/mod.rs`.
 
 ```rust
 use crate::core::Context;
@@ -557,7 +595,7 @@ Output notes:
 3. Headless-Bevy gate: no rendering/window/UI Bevy modules enabled.
 4. Minimal-runtime gate: app, ecs, time capabilities are present and verified.
 5. Generated-code gate: `src/gen` has been regenerated and re-read after Graph changes.
-6. App-wiring gate: all manual runtime logic lives in `src/app/`, not `src/gen/`.
+6. App-wiring gate: all manual runtime logic lives in `src/app/`, not `src/gen/`; each System/EventSystem is in its own file with snake_case naming.
 7. Registration gate: every System/EventSystem module is wired through `src/app/mod.rs`.
 8. Startup gate: world bootstrap logic is idempotent and singleton-safe.
 9. Build gate: `cargo check` succeeds for the Rust runtime crate.

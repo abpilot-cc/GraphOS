@@ -163,7 +163,7 @@ export function createSimulator(config: SimulatorConfig) {
 
         if (fs.existsSync(path.join(workDir, 'dist', 'app_bg.wasm'))) {
             isLoading = true;
-            WasmSimulator.load(path.join(workDir, 'dist', 'app_bg.wasm')).then((app) => {
+            WasmSimulator.load(path.join(workDir, 'dist', 'app.js')).then((app) => {
                 isLoading = false;
                 simulator = app;
                 syncSocketRefs();

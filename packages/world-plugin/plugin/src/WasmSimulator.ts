@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { IEvent, IObject, ISimulator } from "./ISimulator.js";
+import path from "node:path";
+import fs from "node:fs";
 
 
 type WasmExports = {
@@ -54,6 +56,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
         this._wasm = wasm;
         this._memory = memory;
         let format = pusString("json", wasm, memory);
+        wasm.ffi_app_initialize();
         this._appId = wasm.ffi_app_create(format[0]);
         wasm.ffi_free(format[0], format[1]);
         this._length = [wasm.ffi_alloc(8), 8];
@@ -82,6 +85,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
         const outboundLen = Number(new DataView(this._memory.buffer).getBigUint64(this._length[0], true));
         if (outboundPtr !== 0 && outboundLen > 0) {
             const text = dec.decode(new Uint8Array(this._memory.buffer, outboundPtr, outboundLen));
+            console.info(text);
             const spawns = new Map<string, IObject>();
             const changes = new Map<string, IObject>();
             const events: CustomEvent[] = [];
@@ -143,33 +147,12 @@ export class WasmSimulator extends EventTarget implements ISimulator {
     }
 
     static async load(p: string): Promise<WasmSimulator> {
-        const buf = readFileSync(p);
-        const mod = await WebAssembly.compile(buf);
-        const instance = await WebAssembly.instantiate(mod, WasmSimulator.imports);
-        const wasm = instance.exports as unknown as WasmExports;
+        const code = readFileSync(p).toString();
+        const fn = eval(`(function(__dirname,require) { ${code} return wasm; })`)
+        const wasm = fn(path.dirname(p), function (name: string) {
+            if (name == 'fs') return fs;
+        }) as WasmExports;
         const memory = wasm.memory;
         return new WasmSimulator(wasm, memory);
     }
-
-    private static get imports(): WebAssembly.Imports {
-        return {
-            "./app_bg.js": {
-                __wbg___wbindgen_is_undefined_67b456be8673d3d7() { return 0; },
-                __wbg___wbindgen_throw_1506f2235d1bdba0() {
-                    throw new Error("wasm throw");
-                },
-                __wbg_now_e7c6795a7f81e10f() { return Date.now(); },
-                __wbg_performance_3fcf6e32a7e1ed0a() {
-                    return 0;
-                },
-                __wbg_static_accessor_GLOBAL_9d53f2689e622ca1() { return 0; },
-                __wbg_static_accessor_GLOBAL_THIS_a1a35cec07001a8a() { return 0; },
-                __wbg_static_accessor_SELF_4c59f6c7ea29a144() { return 0; },
-                __wbg_static_accessor_WINDOW_e70ae9f2eb052253() { return 0; },
-                __wbindgen_object_clone_ref(a: number) { return a; },
-                __wbindgen_object_drop_ref() { },
-            },
-        };
-    }
-
 }

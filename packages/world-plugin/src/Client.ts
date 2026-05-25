@@ -64,7 +64,7 @@ export interface IObject {
 
 type AppRecord = {
     time: number;
-    type: 'event' | 'get' | 'add' | 'set' | 'del';
+    type: 'event' | 'spawn' | 'despawn' | 'change';
     data: IEvent<IObject> | IObject;
     id: number;
 };
@@ -198,7 +198,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                         if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
                             return [data, ...prevRecords];
                         }
-                        if (data.type === 'set') {
+                        if (data.type === 'change') {
                             Object.assign(prevRecords[0].data, data.data);
                             return [...prevRecords];
                         }
@@ -206,7 +206,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                     });
                     if (data.type !== 'event') {
                         let object = data.data as IObject;
-                        if (data.type === 'add') {
+                        if (data.type === 'spawn') {
                             let vs = objectSet.get(object.table);
                             if (!vs) {
                                 object = { ...object };
@@ -226,7 +226,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                                     vs[1].set(object.id, object);
                                 }
                             }
-                        } else if (data.type === 'set') {
+                        } else if (data.type === 'change') {
                             let vs = objectSet.get(object.table);
                             if (vs) {
                                 let v = vs[1].get(object.id);
@@ -235,7 +235,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                                     object = v;
                                 }
                             }
-                        } else if (data.type === 'del') {
+                        } else if (data.type === 'despawn') {
                             let vs = objectSet.get(object.table);
                             if (vs) {
                                 let v = vs[1].get(object.id);
@@ -254,7 +254,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                         });
                         setFocusObject((prevFocus) => {
                             if (prevFocus && prevFocus[0].id === object.id && prevFocus[0].table === object.table) {
-                                if (data.type === 'del') {
+                                if (data.type === 'despawn') {
                                     return null;
                                 }
                                 return [object, prevFocus[1]];
