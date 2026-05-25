@@ -654,16 +654,34 @@ Output notes:
 
 When implementing or fixing Systems/EventSystems, use the simulator API to verify runtime behavior in a tight iteration loop without restarting the GraphOS service.
 
-### Iteration workflow
+### Verification flow: pause → inspect logs
 
-1. **Implement or fix** the Rust System/EventSystem code in `src/app/`.
-2. **Rebuild wasm** with `npm run build:wasm:node`.
-3. **Restart simulator** via API (no service restart needed):
-   - `POST /api/world/reset` — reset to initial state, clearing all runtime state and logs.
-   - Then `POST /api/world/start` — start the simulator clock from time zero.
-4. **Drive scenario** by sending events through `POST /api/world/event` (e.g. `{ "type": "MyEvent", "payload": { ... } }`).
-5. **Inspect logs** via `GET /api/world/log` to verify expected `event`, `get`, `set`, `add`, and `del` records were produced.
-6. If logs show incorrect or missing behavior, return to step 1 and repeat.
+When the simulator is running and you need to check runtime behavior:
+
+1. **Pause** the simulator to freeze state at the current tick:
+   - `POST /api/world/pause` — stops the clock, preserving all runtime state and accumulated logs.
+2. **Inspect logs** via `GET /api/world/log` to verify expected `event`, `get`, `set`, `add`, and `del` records were produced up to the pause point.
+3. **Analyze** the log entries against expected behavior. For each log entry, check:
+   - Does the operation type (`event`/`get`/`set`/`add`/`del`) match what the System/EventSystem should produce?
+   - Do the target entity/component IDs and values match expectations?
+   - Is the ordering of operations correct relative to system execution order?
+4. If logs are correct, `POST /api/world/resume` to continue. If incorrect, proceed to the fix cycle below.
+
+**Why pause first:** pausing before log inspection ensures you're reading a stable snapshot at a known point in time, rather than chasing logs that are still being written. This is especially important for systems with fast tick rates or async event flows.
+
+### Fix cycle: code change → reset → start
+
+When logs show incorrect or missing behavior, apply the fix and restart the simulator without restarting the service:
+
+1. **Modify code** — edit the Rust System/EventSystem code in `src/app/`.
+2. **Rebuild wasm** — run `npm run build:wasm:node` to compile changes. The simulator picks up the new wasm automatically on next reset.
+3. **Reset** — `POST /api/world/reset` clears all runtime state, entities, and accumulated logs, returning the simulator to initial state.
+4. **Start** — `POST /api/world/start` starts the simulator clock from time zero, re-running bootstrap systems and initializing fresh state with the updated wasm.
+5. **Drive scenario** — send events through `POST /api/world/event` to trigger the specific code path being verified (e.g. `{ "type": "MyEvent", "payload": { ... } }`).
+6. **Pause and inspect** — `POST /api/world/pause` then `GET /api/world/log` to verify the fix.
+7. If logs still show incorrect behavior, return to step 1 and repeat.
+
+**Why reset-then-start (not just resume):** after a code change, the old runtime state, entities, and component values may be incompatible with the updated wasm logic. Reset ensures a clean slate; start re-runs all bootstrap/Startup systems with the new code so you're testing against fresh, consistent state. Skipping reset can produce false positives or crashes from stale entity data.
 
 ### API reference (from graph-world skill)
 
@@ -671,9 +689,9 @@ When implementing or fixing Systems/EventSystems, use the simulator API to verif
 |---|---|---|
 | `/api/world/state` | GET | Get simulator state: `{ duration, current, state, scale, fps }` |
 | `/api/world/start` | POST | Start simulator clock from time zero |
-| `/api/world/pause` | POST | Pause simulator clock |
-| `/api/world/resume` | POST | Resume paused simulator |
-| `/api/world/reset` | POST | Reset to initial state, clear logs |
+| `/api/world/pause` | POST | Pause simulator clock, preserving state and logs for inspection |
+| `/api/world/resume` | POST | Resume paused simulator from where it stopped |
+| `/api/world/reset` | POST | Reset to initial state, clear all entities and logs |
 | `/api/world/event` | POST | Send event payload into simulator |
 | `/api/world/log` | GET | Query logged records (supports `startTime`/`endTime` params) |
 
@@ -684,6 +702,7 @@ When implementing or fixing Systems/EventSystems, use the simulator API to verif
 - Never restart the GraphOS service to pick up wasm changes; `npm run build:wasm:node` + `POST /api/world/reset` then `POST /api/world/start` is sufficient.
 - After `npm run build:wasm:node` succeeds, immediately verify through the simulator API before declaring the fix complete.
 - If the log payload is large, generate a focused analysis script rather than reading the full response manually (see graph-world skill for `/api/world/log` query patterns).
+- Always pause before log inspection when the simulator is running; never read logs on a running simulator — the log tail may be incomplete or still being written.
 
 ## Example Requests
 
