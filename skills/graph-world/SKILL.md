@@ -83,6 +83,7 @@ Use simulator log inspection for:
 
 Use these endpoints to control simulator execution via HTTP. All three accept a POST request and return `{ ok: true }` on success.
 
+- `POST /api/world/start` — Start the simulator clock from time zero. Begins time progression and lifecycle logic execution.
 - `POST /api/world/pause` — Pause the simulator clock. Log recording continues but time progression stops.
 - `POST /api/world/resume` — Resume the simulator clock from where it was paused.
 - `POST /api/world/reset` — Reset the simulator to its initial state, clearing all runtime state and logs.

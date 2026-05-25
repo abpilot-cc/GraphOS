@@ -484,6 +484,11 @@ export default function install(app: IApp, env: any) {
         res.json({ ok: true });
     });
 
+    app.express().post('/api/world/start', (_req, res) => {
+        simulator.start();
+        res.json({ ok: true });
+    });
+
     const distPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../dist");
     app.express().use("/world", express.static(distPath));
     app.express().get("/world/*", (req, res) => {

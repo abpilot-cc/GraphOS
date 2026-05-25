@@ -650,6 +650,38 @@ Output notes:
 - Request needs graph topology change:
   pause Rust edits and switch back to `graph-world` first.
 
+## Simulator Log Verification Loop
+
+When implementing or fixing Systems/EventSystems, use the simulator API to verify runtime behavior in a tight iteration loop without restarting the GraphOS service.
+
+### Iteration workflow
+
+1. **Implement or fix** the Rust System/EventSystem code in `src/app/`.
+2. **Rebuild wasm** with `npm run build:wasm:node`.
+3. **Restart simulator** via API (no service restart needed):
+   - `POST /api/world/reset` — reset to initial state, clearing all runtime state and logs.
+   - Then `POST /api/world/start` — start the simulator clock from time zero.
+4. **Drive scenario** by sending events through `POST /api/world/event` (e.g. `{ "type": "MyEvent", "payload": { ... } }`).
+5. **Inspect logs** via `GET /api/world/log` to verify expected `event`, `get`, `set`, `add`, and `del` records were produced.
+6. If logs show incorrect or missing behavior, return to step 1 and repeat.
+
+### API reference (from graph-world skill)
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/world/start` | POST | Start simulator clock from time zero |
+| `/api/world/pause` | POST | Pause simulator clock |
+| `/api/world/resume` | POST | Resume paused simulator |
+| `/api/world/reset` | POST | Reset to initial state, clear logs |
+| `/api/world/event` | POST | Send event payload into simulator |
+| `/api/world/log` | GET | Query logged records (supports `startTime`/`endTime` params) |
+
+### Key constraints
+
+- Never restart the GraphOS service to pick up wasm changes; `npm run build:wasm:node` + `POST /api/world/reset` then `POST /api/world/start` is sufficient.
+- After `npm run build:wasm:node` succeeds, immediately verify through the simulator API before declaring the fix complete.
+- If the log payload is large, generate a focused analysis script rather than reading the full response manually (see graph-world skill for `/api/world/log` query patterns).
+
 ## Example Requests
 
 - Bootstrap a GraphOS world project for Rust runtime with no TypeScript runtime code.
