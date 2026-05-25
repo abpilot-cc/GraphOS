@@ -87,7 +87,14 @@ Use these endpoints to control simulator execution via HTTP. All three accept a 
 - `POST /api/world/pause` — Pause the simulator clock. Log recording continues but time progression stops.
 - `POST /api/world/resume` — Resume the simulator clock from where it was paused.
 - `POST /api/world/reset` — Reset the simulator to its initial state, clearing all runtime state and logs.
-- `POST /api/world/event` — Send a client event into the simulator. The request body should be the event payload (e.g. `{ "type": "MyEvent", "payload": { ... } }`). The simulator dispatches it through the event system as if it originated from a connected client.
+- `POST /api/world/event` — Send a client event into the simulator. The request body must conform to `IEvent` interface. The simulator dispatches it through the event system as if it originated from a connected client.
+  ```ts
+  interface IEvent {
+      type: string;
+      [key: string]: unknown;
+  }
+  ```
+  Example: `{ "type": "MyEvent",  ...additional fields as needed }`
 
 ## Modification Rules (Mandatory Order)
 
