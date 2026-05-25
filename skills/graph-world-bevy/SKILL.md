@@ -157,16 +157,17 @@ Rules:
 
 Before wiring systems, initialize base source files for generated modules.
 
-`src/gen/mod.ts`:
+`src/gen/mod.rs`:
 
-```ts
-// This is auto-generated code.
+```rust
+pub mod world;
 ```
 
 `src/lib.rs`:
 
 ```rust
 pub mod r#gen;
+pub mod app;
 ```
 
 Then implement runtime entry logic.
@@ -207,6 +208,243 @@ cargo check
 cargo run
 ```
 
+## Workflow
+
+### Step 1: Sync Graph Output Into Rust
+
+1. Confirm Graph changes are complete and validated in `graph-world`.
+2. Regenerate `src/gen` if Graph changed.
+3. Re-read generated `src/gen/*.rs` before implementing runtime logic.
+
+Completion checks:
+- Generated `Context`, `Variant`, and `Event` types match the current graph.
+- No `src/app` code is written against stale generated APIs.
+
+### Step 2: Implement Systems In `src/app/`
+
+Implement concrete lifecycle `System` behavior under `src/app/` after Graph ownership is finalized.
+
+Recommended layout:
+
+```text
+src/
+  app/
+    mod.rs
+    world_bootstrap_system.rs
+    game_system.rs
+    start_game_system.rs
+```
+
+Reference implementation for this skill lives in:
+- `skills/graph-world-bevy/src/app/`
+- structure aligned with `/Volumes/SSD_1T/src/abpilot-cc/RPG-Platformer/src/app`
+
+Lifecycle systems in Bevy should be wired with observers and ECS queries, not by editing `src/gen`.
+
+```rust
+use crate::core::Context;
+use crate::r#gen::world::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_time::{Time, Virtual};
+
+pub fn reg(app: &mut App) {
+    app.add_systems(Update, on_update_system);
+    app.add_observer(on_spawn_system);
+    app.add_observer(on_despawn_system);
+}
+
+fn on_update_system(
+    mut query: Query<(&Context, &mut GameTimeComponent), With<GameContext>>,
+    time: Res<Time<Virtual>>,
+) {
+    for (_context, mut game_time) in &mut query {
+        game_time.0 += time.delta_secs_f64();
+    }
+}
+
+fn on_spawn_system(query: Query<(Entity, &Context), Added<GameContext>>) {
+    for (_entity, _context) in &query {
+        // TODO system-specific spawn logic
+    }
+}
+
+fn on_despawn_system(removed: RemovedComponents<GameContext>) {
+    for _entity in removed.read() {
+        // TODO system-specific cleanup logic
+    }
+}
+```
+
+Implementation guidance:
+- Put each graph `System` into its own Rust module under `src/app/`.
+- Use snake_case file names for Rust modules and keep them aligned with graph names.
+- Example: graph node `GameSystem` -> `src/app/game_system.rs`.
+- Register per-system observers from `pub fn reg(app: &mut App)`.
+- Use `Added<YourContext>` for spawn semantics.
+- Use `RemovedComponents<YourContext>` for despawn semantics.
+- Use `Res<Time<Virtual>>` for deterministic update timing.
+- Query generated variant components directly; do not mirror generated state into ad-hoc global caches.
+- Keep temporary working data local to the observer function or a dedicated Bevy `Resource` owned by runtime code.
+- Do not modify generated files under `src/gen`.
+
+Completion checks:
+- Implemented `System` modules compile against the current generated Rust types.
+- `System` logic remains in `src/app/` and does not leak into `src/gen/`.
+- After `System` changes, run `npm run build:wasm`.
+
+### Step 3: Implement World Startup Entry
+
+Goal: define a deterministic startup entry that bootstraps required root/domain contexts.
+
+You must implement startup initialization in a dedicated bootstrap module under `src/app/`.
+
+```rust
+use crate::core::Context;
+use crate::r#gen::world::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+
+const GAME_ID: &str = "game";
+const SCENE_ID: &str = "scene";
+
+pub fn reg(app: &mut App) {
+    app.add_observer(on_world_spawn_system);
+}
+
+fn on_world_spawn_system(
+    query: Query<&Context, (With<WorldContext>, Added<WorldContext>)>,
+    existing_game: Query<&Context, With<GameContext>>,
+    existing_scene: Query<&Context, With<SceneContext>>,
+    mut commands: Commands,
+) {
+    for world in &query {
+        let has_game = existing_game.iter().any(|ctx| ctx.id == GAME_ID);
+        if !has_game {
+            GameContext::spawn(
+                &mut commands,
+                Some(world.id.clone()),
+                GAME_ID,
+                GameTimeComponent(0.0),
+                GameStateComponent(0),
+            );
+        }
+
+        let has_scene = existing_scene.iter().any(|ctx| ctx.id == SCENE_ID);
+        if !has_scene {
+            SceneContext::spawn(
+                &mut commands,
+                Some(world.id.clone()),
+                SCENE_ID,
+                SceneGridComponent(SceneGridSchema {
+                    width: 0,
+                    height: 0,
+                    tile_size: 1.0,
+                    tiles: Vec::new(),
+                }),
+            );
+        }
+    }
+}
+```
+
+Startup guidance:
+- Create a bootstrap `System` under `World` in graph design.
+- Register its module in `src/app/mod.rs`.
+- Use generated `Context::spawn(...)` helpers from `src/gen`.
+- Keep initialization idempotent by checking existing singleton ids before spawning.
+- Prefer fixed ids for singleton/root contexts.
+- Use `pid` to attach child contexts to the owning parent context id.
+- Do not resolve singleton contexts by positional child order.
+
+### Step 4: Implement EventSystems In `src/app/`
+
+Implement graph `EventSystem` handlers as Bevy observers over generated events.
+
+```rust
+use crate::core::Context;
+use crate::r#gen::world::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+
+pub fn reg(app: &mut App) {
+    app.add_observer(on_start_game_event_system);
+}
+
+fn on_start_game_event_system(
+    trigger: On<StartGameEvent>,
+    mut query: Query<(&Context, &mut GameStateComponent), With<GameContext>>,
+) {
+    let event = trigger.event();
+
+    for (_context, mut game_state) in &mut query {
+        game_state.0 = match event.game_type.as_str() {
+            "running" => 1,
+            "paused" => 2,
+            _ => 0,
+        };
+    }
+}
+```
+
+Implementation guidance:
+- Put each graph `EventSystem` into its own Rust module under `src/app/`.
+- Example: graph node `StartGameEventSystem` -> `src/app/start_game_system.rs`.
+- Register event handlers with `app.add_observer(...)`.
+- Use `On<GeneratedEvent>` as the trigger type.
+- Read payload from `trigger.event()`.
+- Fetch target contexts/components via ECS `Query`; mutate only the scope owned by the graph.
+- If event payload schema changes in Graph, regenerate `src/gen` first, then update handler signatures.
+- Do not invent new topology in runtime code to compensate for missing graph nodes; go back to `graph-world`.
+
+Completion checks:
+- Implemented `EventSystem` modules compile against the current generated event payloads.
+- Event handlers only mutate graph-owned scope and stay under `src/app/`.
+- After `EventSystem` changes, run `npm run build:wasm`.
+
+### Step 5: Register Runtime Wiring In `src/app/mod.rs`
+
+After implementing handlers, wire the runtime explicitly in `src/app/mod.rs`.
+
+```rust
+use bevy_app::prelude::*;
+
+pub mod game_system;
+pub mod start_game_system;
+pub mod world_bootstrap_system;
+
+pub fn reg(app: &mut App) {
+    world_bootstrap_system::reg(app);
+    game_system::reg(app);
+    start_game_system::reg(app);
+}
+```
+
+Registration guidance:
+- Register every implemented `System` module in `src/app/mod.rs`.
+- Register every implemented `EventSystem` module in `src/app/mod.rs`.
+- Keep `src/lib.rs` or `src/main.rs` responsible only for high-level runtime assembly:
+
+```rust
+use bevy_app::prelude::*;
+use bevy_time::TimePlugin;
+
+fn main() {
+    let mut app = App::new();
+    app.add_plugins(TimePlugin);
+    crate::core::reg(&mut app);
+    crate::r#gen::world::reg(&mut app);
+    crate::app::reg(&mut app);
+    app.run();
+}
+```
+
+Completion checks:
+- Every implemented `System` and `EventSystem` module is registered.
+- `src/app/mod.rs` matches current graph contracts.
+- Runtime assembly does not require edits inside `src/gen`.
+- After runtime wiring changes, run `npm run build:wasm`.
+
 ### Step 5: wasm-pack packaging
 
 1. Install wasm target and wasm-pack:
@@ -226,10 +464,10 @@ crate-type = ["cdylib", "rlib"]
 3. Build/package with npm scripts:
 
 ```bash
-npm run wasm:build
+npm run build:wasm
 # or
-npm run wasm:build:bundler
-npm run wasm:build:node
+npm run build:wasm:bundler
+npm run build:wasm:node
 ```
 
 4. Optional direct command:
@@ -309,6 +547,8 @@ Output notes:
 - Keep runtime implementation in Rust under this skill.
 - If Graph model changes, apply Graph changes first, then update Rust side adapters/systems.
 - Do not introduce TypeScript runtime code in this workflow.
+- Implement manual runtime logic under `src/app/`; keep generated code isolated under `src/gen/`.
+- Use the reference modules in `skills/graph-world-bevy/src/app/` as the baseline pattern for System/EventSystem wiring.
 
 ## Quality Gates
 
@@ -316,14 +556,29 @@ Output notes:
 2. No-TS gate: no TypeScript runtime implementation is introduced.
 3. Headless-Bevy gate: no rendering/window/UI Bevy modules enabled.
 4. Minimal-runtime gate: app, ecs, time capabilities are present and verified.
-5. Build gate: `cargo check` succeeds for the Rust runtime crate.
-6. wasm gate: `wasm-pack build` succeeds and outputs package files.
-7. cross-compile gate: all required target scripts complete successfully on macOS toolchain.
+5. Generated-code gate: `src/gen` has been regenerated and re-read after Graph changes.
+6. App-wiring gate: all manual runtime logic lives in `src/app/`, not `src/gen/`.
+7. Registration gate: every System/EventSystem module is wired through `src/app/mod.rs`.
+8. Startup gate: world bootstrap logic is idempotent and singleton-safe.
+9. Build gate: `cargo check` succeeds for the Rust runtime crate.
+10. wasm wiring gate: after any `System` / `EventSystem` / `src/app/mod.rs` change, `npm run build:wasm` succeeds.
+11. wasm gate: `wasm-pack build` succeeds and outputs package files.
+12. cross-compile gate: all required target scripts complete successfully on macOS toolchain.
 
 ## Failure Recovery
 
 - `cargo add bevy --no-default-features ...` fails due to feature changes:
   use split crates `bevy_app`, `bevy_ecs`, `bevy_time` instead.
+- Generated Rust types do not match expected Context/Event names:
+  regenerate `src/gen` first, then reopen the generated files before editing `src/app`.
+- Runtime logic was added into generated files:
+  move that code into `src/app/` modules and keep `src/gen` generated-only.
+- `System` or `EventSystem` edits compile in native Rust but fail in wasm packaging:
+  run `npm run build:wasm`, fix target-specific issues, and do not treat the work as complete until wasm packaging passes.
+- Singleton bootstrap creates duplicates:
+  add fixed-id existence checks before calling generated `Context::spawn(...)`.
+- Event handler needs data that is not present in the graph payload or contexts:
+  stop Rust patching and return to `graph-world` to fix topology/schema first.
 - Runtime compiles but time is not advancing:
   verify `TimePlugin` is added and systems run on `Update` schedule.
 - Rendering-related crate unexpectedly appears:
@@ -344,5 +599,7 @@ Output notes:
 ## Example Requests
 
 - Bootstrap a GraphOS world project for Rust runtime with no TypeScript runtime code.
-- Initialize a Bevy headless app using only app/ecs/time and add a basic tick system.
+- Initialize a Bevy headless app using only app/ecs/time and add a basic tick system in `src/app/game_system.rs`.
+- Implement `WorldBootstrapSystem` and register it in `src/app/mod.rs`.
+- Implement a generated `StartGame` EventSystem in `src/app/start_game_system.rs`.
 - Migrate existing world runtime from TS to Rust + Bevy ECS/time while keeping graph workflow unchanged.
