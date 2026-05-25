@@ -79,6 +79,14 @@ Use simulator log inspection for:
 - Confirming that a `System` or `EventSystem` changed the intended Context data during the expected simulated interval.
 - Narrowing a runtime defect before patching graph topology or generated logic.
 
+## Simulator Control API
+
+Use these endpoints to control simulator execution via HTTP. All three accept a POST request and return `{ ok: true }` on success.
+
+- `POST /api/world/pause` — Pause the simulator clock. Log recording continues but time progression stops.
+- `POST /api/world/resume` — Resume the simulator clock from where it was paused.
+- `POST /api/world/reset` — Reset the simulator to its initial state, clearing all runtime state and logs.
+
 ## Modification Rules (Mandatory Order)
 
 These rules are hard constraints for any change workflow:

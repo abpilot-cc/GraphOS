@@ -221,7 +221,7 @@ Every graph `System` and `EventSystem` MUST follow these rules with no exception
 4. **Registration: `src/app/mod.rs`** — every System/EventSystem module must be declared (`pub mod ...`) and its `reg(app)` called inside `src/app/mod.rs`. No implicit or auto-registration.
 5. **Types & enums: `src/app/types.rs`** — define all shared types, enums, and constants here. This includes: singleton entity IDs (e.g. `const GAME_ID: &str = "game"`), state enums (e.g. `enum GameState { ... }`), event type enums, and any constant strings used across multiple Systems/EventSystems. Do not scatter these definitions across individual System files.
 6. **Config definitions: `src/app/config.rs`** — define configuration structs here. Every tunable logic parameter (speeds, durations, thresholds, sizes, probabilities) must live in a config struct, never as a hardcoded magic number in System logic. Example: `struct GameConfig { pub move_speed: f32, pub jump_force: f32 }`.
-7. **Config instances: `src/config/*.rs`** — concrete config values go under `src/config/` as separate files (e.g. `src/config/game_config.rs`). Each file instantiates a config struct with actual values. Systems read config via Bevy `Resource`, never by importing config files directly — this keeps Systems testable with different configs.
+7. **Config instances: `src/config/*.rs` + `src/config/mod.rs`** — concrete config values go under `src/config/` as separate files, split by domain (e.g. one file per map/scene: `src/config/map_city.rs`, `src/config/map_dungeon.rs`). `src/config/mod.rs` aggregates all config modules (`pub mod map_city; pub mod map_dungeon; ...`) and optionally re-exports them. Systems read config via Bevy `Resource`, never by importing config files directly — this keeps Systems testable with different configs.
 
 Directory layout example:
 
@@ -236,7 +236,10 @@ src/
     scene_system.rs              # System: SceneSystem (if needed)
     start_game_event_system.rs   # EventSystem: StartGameEventSystem
   config/
-    game_config.rs               # concrete GameConfig instance (rule 7)
+    mod.rs                    # aggregates all config modules
+    game_config.rs            # global gameplay params
+    map_city.rs               # city map config
+    map_dungeon.rs            # dungeon map config
   gen/
     mod.rs
     world.rs                     # generated — never edit

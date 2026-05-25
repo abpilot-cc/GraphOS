@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import MonacoEditor from '@monaco-editor/react';
 import { Maximize2, Monitor, X } from 'lucide-react';
 
+import AiMessageInput from './AiMessageInput';
+
 function useAppTheme(): 'light' | 'dark' {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const t = document.documentElement.getAttribute('data-theme');
@@ -92,7 +94,7 @@ export default function PropertiesPanel({
           <p className="text-[10px] text-text-secondary uppercase tracking-widest">{selectedNode?.id}</p>
         </div>
 
-        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+        <div className="flex-1 p-6 pb-0 space-y-6 overflow-y-auto">
           {selectedNode && (() => {
             const nodeTypeDef = nodeTypeRegistry.find((nt) => nt.type === selectedNode.type);
             const props: Record<string, unknown> = (selectedNode.data as any)?.properties ?? {};
@@ -315,6 +317,11 @@ export default function PropertiesPanel({
             );
           })()}
         </div>
+
+        <AiMessageInput
+          selectedNode={selectedNode}
+          nodeTypeRegistry={nodeTypeRegistry}
+        />
       </div>
     </aside>
 

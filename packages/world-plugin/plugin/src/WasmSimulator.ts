@@ -85,7 +85,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
         const outboundLen = Number(new DataView(this._memory.buffer).getBigUint64(this._length[0], true));
         if (outboundPtr !== 0 && outboundLen > 0) {
             const text = dec.decode(new Uint8Array(this._memory.buffer, outboundPtr, outboundLen));
-            console.info(text);
+            // console.info(text);
             const spawns = new Map<string, IObject>();
             const changes = new Map<string, IObject>();
             const events: CustomEvent[] = [];

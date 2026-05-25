@@ -1,6 +1,6 @@
 {
   "name": "graphos-cli",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "type": "module",
   "files": [
     "bin/",
@@ -21,6 +21,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@opencode-ai/sdk": "^1.15.10",
     "cors": "^2.8.6",
     "express": "^4.21.2",
     "graphos-core": "^1.0.6",

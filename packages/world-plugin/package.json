@@ -1,6 +1,6 @@
 {
   "name": "graphos-world-plugin",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "type": "module",
   "graphos": {
     "plugin": {

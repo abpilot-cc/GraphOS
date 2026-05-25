@@ -464,6 +464,21 @@ export default function install(app: IApp, env: any) {
         }
     });
 
+    app.express().post('/api/world/pause', (_req, res) => {
+        simulator.pause();
+        res.json({ ok: true });
+    });
+
+    app.express().post('/api/world/resume', (_req, res) => {
+        simulator.resume();
+        res.json({ ok: true });
+    });
+
+    app.express().post('/api/world/reset', (_req, res) => {
+        simulator.reset();
+        res.json({ ok: true });
+    });
+
     const distPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../dist");
     app.express().use("/world", express.static(distPath));
     app.express().get("/world/*", (req, res) => {

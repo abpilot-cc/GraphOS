@@ -23,6 +23,51 @@ Default local runtime:
 
 If your environment uses a different host or port, replace the base URL accordingly.
 
+## Opencode Server Configuration
+
+GraphOS includes an AI Assistant panel in the Properties sidebar that connects to an opencode server to process prompts about selected graph nodes.
+
+### Starting the Opencode Server
+
+```bash
+opencode serve [--port <number>] [--hostname <string>] [--cors <origin>]
+```
+
+Default: `opencode serve` listens on `http://127.0.0.1:4096`.
+
+For browser access from GraphOS, enable CORS:
+
+```bash
+opencode serve --cors http://localhost:3000
+```
+
+### Environment Variable
+
+When running the GraphOS dev server or build, set the environment variable to configure the opencode server URL:
+
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_OPENCODE_SERVER_URL` | `http://localhost:4096` | Base URL of the running opencode server |
+
+Usage in `.env` or `.env.local`:
+
+```bash
+VITE_OPENCODE_SERVER_URL=http://localhost:4096
+```
+
+### AI Assistant Usage
+
+1. Start opencode: `opencode` (TUI mode) or `opencode serve`
+2. Start GraphOS: `npm run dev`
+3. Select a node on the graph canvas
+4. In the Properties panel, scroll to the **AI Assistant** section at the bottom
+5. Click **Generate** to auto-create a prompt with the node's ID, type, and properties
+6. Edit the prompt as needed, then click **Run in Terminal** (or `Cmd+Enter`)
+
+The assistant sends tasks to the opencode terminal for execution:
+- **Terminal mode** (default): Uses `tui.appendPrompt` + `tui.submitPrompt` to push the task into the opencode TUI, where it runs with full visibility. Falls back to `session.prompt` if no TUI is attached.
+- The task appears and executes in the opencode terminal session, with all tool calls and responses visible there.
+
 ## API Reference
 
 ### get_graph_description
