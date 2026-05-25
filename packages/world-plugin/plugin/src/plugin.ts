@@ -422,6 +422,10 @@ export default function install(app: IApp, env: any) {
         }
     });
 
+    app.express().get('/api/world/state', (_req, res) => {
+        res.json(simulator.getState());
+    });
+
     app.express().get('/api/world/log', (req, res) => {
         const parseTime = (value: unknown, name: string): number | undefined => {
             if (value === undefined) return undefined;

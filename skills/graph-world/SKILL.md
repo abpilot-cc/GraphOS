@@ -83,6 +83,7 @@ Use simulator log inspection for:
 
 Use these endpoints to control simulator execution via HTTP. All three accept a POST request and return `{ ok: true }` on success.
 
+- `GET /api/world/state` — Get simulator current state. Returns `{ duration, current, state, scale, fps }`. `state` is one of `'running' | 'paused' | 'loading' | 'stopped'`.
 - `POST /api/world/start` — Start the simulator clock from time zero. Begins time progression and lifecycle logic execution.
 - `POST /api/world/pause` — Pause the simulator clock. Log recording continues but time progression stops.
 - `POST /api/world/resume` — Resume the simulator clock from where it was paused.

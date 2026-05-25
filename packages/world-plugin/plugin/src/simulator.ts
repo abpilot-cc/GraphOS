@@ -204,6 +204,15 @@ export function createSimulator(config: SimulatorConfig) {
         getCurrentTime() {
             return current;
         },
+        getState() {
+            return {
+                duration,
+                current,
+                state: simulator ? (isPaused ? 'paused' : 'running') : (isLoading ? 'loading' : 'stopped'),
+                scale,
+                fps,
+            };
+        },
         getLogs(options?: LogQueryOptions) {
             const start = options?.start ?? Number.NEGATIVE_INFINITY;
             const end = options?.end ?? current;

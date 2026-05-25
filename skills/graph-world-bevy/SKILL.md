@@ -669,6 +669,7 @@ When implementing or fixing Systems/EventSystems, use the simulator API to verif
 
 | Endpoint | Method | Purpose |
 |---|---|---|
+| `/api/world/state` | GET | Get simulator state: `{ duration, current, state, scale, fps }` |
 | `/api/world/start` | POST | Start simulator clock from time zero |
 | `/api/world/pause` | POST | Pause simulator clock |
 | `/api/world/resume` | POST | Resume paused simulator |
