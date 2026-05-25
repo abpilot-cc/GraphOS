@@ -110,7 +110,7 @@ npm i -D graphos-world-plugin graphos-cli
 
 ```bash
 npm run graphos -- --help
-npm run build:wasm
+npm run build:wasm:node
 npm run build:macos:arm64
 ```
 
@@ -291,7 +291,7 @@ Implementation guidance:
 Completion checks:
 - Implemented `System` modules compile against the current generated Rust types.
 - `System` logic remains in `src/app/` and does not leak into `src/gen/`.
-- After `System` changes, run `npm run build:wasm`.
+- After `System` changes, run `npm run build:wasm:node`.
 
 ### Step 3: Implement World Startup Entry
 
@@ -574,7 +574,7 @@ Output notes:
 - Runtime logic was added into generated files:
   move that code into `src/app/` modules and keep `src/gen` generated-only.
 - `System` or `EventSystem` edits compile in native Rust but fail in wasm packaging:
-  run `npm run build:wasm`, fix target-specific issues, and do not treat the work as complete until wasm packaging passes.
+  run `npm run build:wasm:node`, fix target-specific issues, and do not treat the work as complete until wasm packaging passes.
 - Singleton bootstrap creates duplicates:
   add fixed-id existence checks before calling generated `Context::spawn(...)`.
 - Event handler needs data that is not present in the graph payload or contexts:
