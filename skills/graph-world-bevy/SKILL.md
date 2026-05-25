@@ -218,6 +218,9 @@ Every graph `System` and `EventSystem` MUST follow these rules with no exception
 2. **File naming: lowercase + underscores (snake_case)** — match the graph node name converted to snake_case. Example: graph node `StartGameEventSystem` → file `start_game_event_system.rs`.
 3. **Directory: `src/app/`** — all System and EventSystem implementation files go under `src/app/`. Do not place them in `src/gen/`, `src/core/`, or any other directory.
 4. **Registration: `src/app/mod.rs`** — every System/EventSystem module must be declared (`pub mod ...`) and its `reg(app)` called inside `src/app/mod.rs`. No implicit or auto-registration.
+5. **Types & enums: `src/app/types.rs`** — define all shared types, enums, and constants here. This includes: singleton entity IDs (e.g. `const GAME_ID: &str = "game"`), state enums (e.g. `enum GameState { ... }`), event type enums, and any constant strings used across multiple Systems/EventSystems. Do not scatter these definitions across individual System files.
+6. **Config definitions: `src/app/config.rs`** — define configuration structs here. Every tunable logic parameter (speeds, durations, thresholds, sizes, probabilities) must live in a config struct, never as a hardcoded magic number in System logic. Example: `struct GameConfig { pub move_speed: f32, pub jump_force: f32 }`.
+7. **Config instances: `src/config/*.rs`** — concrete config values go under `src/config/` as separate files (e.g. `src/config/game_config.rs`). Each file instantiates a config struct with actual values. Systems read config via Bevy `Resource`, never by importing config files directly — this keeps Systems testable with different configs.
 
 Directory layout example:
 
@@ -225,10 +228,14 @@ Directory layout example:
 src/
   app/
     mod.rs                       # declares all modules + calls reg(app) for each
+    types.rs                     # shared types, enums, constants (rule 5)
+    config.rs                    # config struct definitions (rule 6)
     world_bootstrap_system.rs    # System: WorldBootstrapSystem
     game_system.rs               # System: GameSystem
     scene_system.rs              # System: SceneSystem (if needed)
     start_game_event_system.rs   # EventSystem: StartGameEventSystem
+  config/
+    game_config.rs               # concrete GameConfig instance (rule 7)
   gen/
     mod.rs
     world.rs                     # generated — never edit
@@ -244,6 +251,8 @@ When adding a new System/EventSystem:
 2. Add `pub mod <snake_case_name>;` to `src/app/mod.rs`
 3. Add `<snake_case_name>::reg(app);` inside the `reg()` function in `src/app/mod.rs`
 
+**Ordering rule:** Before implementing any System or EventSystem logic, `src/app/types.rs` and `src/app/config.rs` must be fully defined first. Systems consume types and config; never write System logic against types/config that don't exist yet. The correct workflow order is: **types → config → systems**.
+
 ### Step 1: Sync Graph Output Into Rust
 
 1. Confirm Graph changes are complete and validated in `graph-world`.
@@ -258,18 +267,9 @@ Completion checks:
 
 Implement concrete lifecycle `System` behavior under `src/app/` after Graph ownership is finalized.
 
+**Prerequisite:** `src/app/types.rs` and `src/app/config.rs` must be fully defined before writing any System logic (see [Ordering rule](#file-organization-rules-mandatory)).
+
 **Follow the [File Organization Rules](#file-organization-rules-mandatory) strictly.** Each graph System gets its own file in `src/app/`, named in snake_case, and registered in `src/app/mod.rs`.
-
-Recommended layout:
-
-```text
-src/
-  app/
-    mod.rs
-    world_bootstrap_system.rs
-    game_system.rs
-    start_game_system.rs
-```
 
 Reference implementation for this skill lives in:
 - `skills/graph-world-bevy/src/app/`
@@ -397,6 +397,8 @@ Startup guidance:
 
 Implement graph `EventSystem` handlers as Bevy observers over generated events.
 
+**Prerequisite:** `src/app/types.rs` and `src/app/config.rs` must be fully defined first (see [Ordering rule](#file-organization-rules-mandatory)).
+
 **Follow the [File Organization Rules](#file-organization-rules-mandatory) strictly.** Each EventSystem gets its own file in `src/app/`, named in snake_case (e.g. `StartGameEventSystem` → `start_game_event_system.rs`), and registered in `src/app/mod.rs`.
 
 ```rust
@@ -447,8 +449,10 @@ After implementing handlers, wire the runtime explicitly in `src/app/mod.rs`.
 ```rust
 use bevy_app::prelude::*;
 
+pub mod config;
 pub mod game_system;
 pub mod start_game_system;
+pub mod types;
 pub mod world_bootstrap_system;
 
 pub fn reg(app: &mut App) {
@@ -459,17 +463,23 @@ pub fn reg(app: &mut App) {
 ```
 
 Registration guidance:
+- Declare `pub mod types;` and `pub mod config;` in `src/app/mod.rs`.
 - Register every implemented `System` module in `src/app/mod.rs`.
 - Register every implemented `EventSystem` module in `src/app/mod.rs`.
+- Insert concrete config instances (from `src/config/`) as Bevy `Resource` in `main.rs`, not inside `src/app/mod.rs`.
 - Keep `src/lib.rs` or `src/main.rs` responsible only for high-level runtime assembly:
 
 ```rust
 use bevy_app::prelude::*;
 use bevy_time::TimePlugin;
 
+mod config;
+
 fn main() {
     let mut app = App::new();
     app.add_plugins(TimePlugin);
+    // Insert concrete config instances as Resources (rule 7)
+    app.insert_resource(config::game_config::GAME_CONFIG);
     crate::core::reg(&mut app);
     crate::r#gen::world::reg(&mut app);
     crate::app::reg(&mut app);
@@ -597,11 +607,13 @@ Output notes:
 5. Generated-code gate: `src/gen` has been regenerated and re-read after Graph changes.
 6. App-wiring gate: all manual runtime logic lives in `src/app/`, not `src/gen/`; each System/EventSystem is in its own file with snake_case naming.
 7. Registration gate: every System/EventSystem module is wired through `src/app/mod.rs`.
-8. Startup gate: world bootstrap logic is idempotent and singleton-safe.
-9. Build gate: `cargo check` succeeds for the Rust runtime crate.
-10. wasm wiring gate: after any `System` / `EventSystem` / `src/app/mod.rs` change, `npm run build:wasm` succeeds.
-11. wasm gate: `wasm-pack build` succeeds and outputs package files.
-12. cross-compile gate: all required target scripts complete successfully on macOS toolchain.
+8. Types gate: shared types, enums, constants, and singleton IDs are centralized in `src/app/types.rs`; not scattered across System files.
+9. Config gate: all tunable logic parameters live in config structs (`src/app/config.rs`); no magic numbers in System logic; concrete config instances exist under `src/config/`.
+10. Startup gate: world bootstrap logic is idempotent and singleton-safe.
+11. Build gate: `cargo check` succeeds for the Rust runtime crate.
+12. wasm wiring gate: after any `System` / `EventSystem` / `src/app/mod.rs` change, `npm run build:wasm` succeeds.
+13. wasm gate: `wasm-pack build` succeeds and outputs package files.
+14. cross-compile gate: all required target scripts complete successfully on macOS toolchain.
 
 ## Failure Recovery
 
