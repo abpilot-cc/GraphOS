@@ -206,6 +206,7 @@ fn main() {
 ```bash
 cargo check
 cargo run
+npm run build:wasm:node
 ```
 
 ## Workflow
