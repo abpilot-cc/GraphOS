@@ -1,6 +1,6 @@
 ---
 name: graph-world-bevy
-description: 'Rust + Bevy (headless app/ecs/time only) implementation workflow for GraphOS world projects. Use after graph-world closes graph design, then bootstrap GraphOS project files and initialize a Rust runtime without Bevy rendering stack.'
+description: 'Rust + Bevy (headless app/ecs/time only) implementation workflow for GraphOS world projects. Use after graph-world closes graph design, and use graph-management for graph reads/mutations before bootstrapping GraphOS project files and initializing a Rust runtime without Bevy rendering stack.'
 argument-hint: 'Describe your Bevy world task, e.g. "bootstrap GraphOS + Rust bevy_app/bevy_ecs/bevy_time project in current directory and create World bootstrap systems"'
 user-invocable: true
 ---
@@ -9,7 +9,7 @@ user-invocable: true
 
 Implement GraphOS world runtime in Rust with Bevy ECS/time only, without Bevy rendering, windowing, UI, or asset pipeline.
 
-This skill depends on `graph-world` for graph modeling and closure validation. Use `graph-world` first whenever the request changes `World`/`Context`/`Variant`/`System`/`Event`/`EventSystem` topology.
+This skill depends on `graph-world` for graph modeling and closure validation, and on `graph-management` for graph inspection, validation, and atomic graph mutations. Use `graph-world` first whenever the request changes `World`/`Context`/`Variant`/`System`/`Event`/`EventSystem` topology, then use `graph-management` to read or apply the resulting graph changes.
 
 ## Scope Boundary
 
@@ -28,7 +28,8 @@ This skill depends on `graph-world` for graph modeling and closure validation. U
 
 1. Complete graph design with `graph-world` first.
 2. Finish graph closed-loop validation before runtime coding.
-3. If Graph changed, regenerate/update GraphOS outputs before changing Rust runtime bindings.
+3. Use `graph-management` to inspect graph state, validate node types/plugins, and apply any graph mutations before changing Rust runtime bindings.
+4. If Graph changed, regenerate/update GraphOS outputs before changing Rust runtime bindings.
 
 ## Project Bootstrap (GraphOS, No TypeScript Code)
 
