@@ -72,6 +72,7 @@ export function createSimulator(config: SimulatorConfig) {
     let isPaused: boolean = false;
     let records: AppRecord[] = [];
     let isLoading = false;
+    let errorMessage: string | undefined = undefined;
 
     const syncSocketRefs = () => {
         for (const socket of socketSet) {
@@ -83,9 +84,10 @@ export function createSimulator(config: SimulatorConfig) {
         const payload = {
             duration,
             current,
-            state: simulator ? (isPaused ? 'paused' : 'running') : (isLoading ? 'loading' : 'stopped'),
+            state: errorMessage ? 'error' : simulator ? (isPaused ? 'paused' : 'running') : (isLoading ? 'loading' : 'stopped'),
             scale,
             fps,
+            error: errorMessage,
         };
 
         if (target) {
@@ -170,6 +172,10 @@ export function createSimulator(config: SimulatorConfig) {
                 onInit();
                 emitState();
                 tv = setTimeout(onUpdate, 0);
+            }).catch((e) => {
+                isLoading = false;
+                errorMessage = `Failed to load Wasm simulator: ${e instanceof Error ? e.message : String(e)}`;
+                emitState();
             });
         } else {
             isLoading = true;
@@ -180,6 +186,10 @@ export function createSimulator(config: SimulatorConfig) {
                 onInit();
                 emitState();
                 tv = setTimeout(onUpdate, 0);
+            }).catch((e) => {
+                isLoading = false;
+                errorMessage = `Failed to load App simulator: ${e instanceof Error ? e.message : String(e)}`;
+                emitState();
             });
         }
 
@@ -208,7 +218,8 @@ export function createSimulator(config: SimulatorConfig) {
             return {
                 duration,
                 current,
-                state: simulator ? (isPaused ? 'paused' : 'running') : (isLoading ? 'loading' : 'stopped'),
+                state: errorMessage ? 'error' : simulator ? (isPaused ? 'paused' : 'running') : (isLoading ? 'loading' : 'stopped'),
+                error: errorMessage,
                 scale,
                 fps,
             };
@@ -256,6 +267,7 @@ export function createSimulator(config: SimulatorConfig) {
             isPaused = false;
             simulator?.exit();
             simulator = undefined;
+            errorMessage = undefined;
             records = [];
             clearTimer();
             syncSocketRefs();

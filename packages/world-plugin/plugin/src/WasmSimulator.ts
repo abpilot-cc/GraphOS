@@ -64,7 +64,12 @@ export class WasmSimulator extends EventTarget implements ISimulator {
 
     update(dt: number): void {
         if (this._messages.length > 0) {
-            const s = this._messages.map(e => JSON.stringify(e)).join("\n") + "\n";
+            let lines: string[] = [];
+            while (this._messages.length > 0) {
+                const message = this._messages.shift()!;
+                lines.push(JSON.stringify(message));
+            }
+            const s = lines.join("\n") + "\n";
             const bytes = enc.encode(s);
             const len = bytes.length;
             if (this._inbound === null || this._inbound[1] < len) {
@@ -75,8 +80,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
                 this._inbound = [this._wasm.ffi_alloc(len), len];
             }
             new Uint8Array(this._memory.buffer, this._inbound[0], len).set(bytes);
-            this._wasm.ffi_app_inbound(this._appId, this._inbound[0], this._inbound[1]);
-            this._messages.splice(0, this._messages.length);
+            this._wasm.ffi_app_inbound(this._appId, this._inbound[0], len);
         }
         this._wasm.ffi_app_update(this._appId, dt);
         if (this._length === null) return;
@@ -127,6 +131,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
     }
 
     emit(event: IEvent): void {
+        // console.info("Emitting event:", event);
         this._messages.push({ Event: { type: event.type, payload: event } });
     }
 
@@ -148,10 +153,10 @@ export class WasmSimulator extends EventTarget implements ISimulator {
 
     static async load(p: string): Promise<WasmSimulator> {
         const code = readFileSync(p).toString();
-        const fn = eval(`(function(__dirname,require) { ${code} return wasm; })`)
+        const fn = eval(`(function(__dirname,require,exports) { ${code} return wasm; })`)
         const wasm = fn(path.dirname(p), function (name: string) {
             if (name == 'fs') return fs;
-        }) as WasmExports;
+        }, {}) as WasmExports;
         const memory = wasm.memory;
         return new WasmSimulator(wasm, memory);
     }

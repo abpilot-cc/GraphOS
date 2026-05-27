@@ -469,28 +469,54 @@ export default function install(app: IApp, env: any) {
     });
 
     app.express().post('/api/world/pause', (_req, res) => {
-        simulator.pause();
-        res.json({ ok: true });
+        try {
+            simulator.pause();
+            res.json({ ok: true });
+        }
+        catch (e) {
+            res.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
+
     });
 
     app.express().post('/api/world/resume', (_req, res) => {
-        simulator.resume();
-        res.json({ ok: true });
+        try {
+            simulator.resume();
+            res.json({ ok: true });
+        }
+        catch (e) {
+            res.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
     });
 
     app.express().post('/api/world/reset', (_req, res) => {
-        simulator.reset();
-        res.json({ ok: true });
+        try {
+            simulator.reset();
+            res.json({ ok: true });
+        }
+        catch (e) {
+            res.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
     });
 
     app.express().post('/api/world/event', (req, res) => {
-        simulator.sendEvent(req.body);
-        res.json({ ok: true });
+        try {
+            simulator.sendEvent(req.body);
+            res.json({ ok: true });
+        }
+        catch (e) {
+            res.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
     });
 
     app.express().post('/api/world/start', (_req, res) => {
-        simulator.start();
-        res.json({ ok: true });
+        try {
+            simulator.start();
+            res.json({ ok: true });
+        }
+        catch (e) {
+            res.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
     });
 
     const distPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../dist");
