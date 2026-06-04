@@ -75,7 +75,7 @@ When the `/api/world/log` response is large:
 - If needed, iterate by refining the script filters rather than repeatedly reading the full `/api/world/log` payload manually.
 
 Use simulator log inspection for:
-- Verifying that expected `event`, `get`, `set`, `add`, and `del` records were produced.
+- Verifying that expected `spawn`, `change`, `despawn`, and `event` records were produced.
 - Confirming that a `System` or `EventSystem` changed the intended Context data during the expected simulated interval.
 - Narrowing a runtime defect before patching graph topology or generated logic.
 
