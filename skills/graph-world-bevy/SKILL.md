@@ -135,6 +135,23 @@ cargo init --bin .
 
 If a Cargo project already exists in the current directory, skip this step.
 
+### Cargo.toml Rules (Mandatory)
+
+Apply these rules in `Cargo.toml` for this skill:
+
+1. `package.name` MUST be fixed to `"app"`.
+2. Library output MUST support both crate types: `"cdylib"` and `"rlib"`.
+
+Example:
+
+```toml
+[package]
+name = "app"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+```
+
 ### Step 2: Add Bevy runtime dependencies (no rendering)
 
 Preferred (single `bevy` crate, default features disabled):
@@ -220,9 +237,10 @@ Every graph `System` and `EventSystem` MUST follow these rules with no exception
 2. **File naming: lowercase + underscores (snake_case)** — match the graph node name converted to snake_case. Example: graph node `StartGameEventSystem` → file `start_game_event_system.rs`.
 3. **Directory: `src/app/`** — all System and EventSystem implementation files go under `src/app/`. Do not place them in `src/gen/`, `src/core/`, or any other directory.
 4. **Registration: `src/app/mod.rs`** — every System/EventSystem module must be declared (`pub mod ...`) and its `reg(app)` called inside `src/app/mod.rs`. No implicit or auto-registration.
-5. **Types & enums: `src/app/types.rs`** — define all shared types, enums, and constants here. This includes: singleton entity IDs (e.g. `const GAME_ID: &str = "game"`), state enums (e.g. `enum GameState { ... }`), event type enums, and any constant strings used across multiple Systems/EventSystems. Do not scatter these definitions across individual System files.
-6. **Config definitions: `src/app/config.rs`** — define configuration structs here. Every tunable logic parameter (speeds, durations, thresholds, sizes, probabilities) must live in a config struct, never as a hardcoded magic number in System logic. Example: `struct GameConfig { pub move_speed: f32, pub jump_force: f32 }`.
-7. **Config instances: `src/config/*.rs` + `src/config/mod.rs`** — concrete config values go under `src/config/` as separate files, split by domain (e.g. one file per map/scene: `src/config/map_city.rs`, `src/config/map_dungeon.rs`). `src/config/mod.rs` aggregates all config modules (`pub mod map_city; pub mod map_dungeon; ...`) and optionally re-exports them. Systems read config via Bevy `Resource`, never by importing config files directly — this keeps Systems testable with different configs.
+5. **World startup spawn hook (mandatory): `src/app/mod.rs`** — `reg(app)` MUST include `app.add_systems(Startup, on_world_spawn);`, and `src/app/mod.rs` MUST define `fn on_world_spawn(mut commands: Commands)` that spawns `WorldContext`.
+6. **Types & enums: `src/app/types.rs`** — define all shared types, enums, and constants here. This includes: singleton entity IDs (e.g. `const GAME_ID: &str = "game"`), state enums (e.g. `enum GameState { ... }`), event type enums, and any constant strings used across multiple Systems/EventSystems. Do not scatter these definitions across individual System files.
+7. **Config definitions: `src/app/config.rs`** — define configuration structs here. Every tunable logic parameter (speeds, durations, thresholds, sizes, probabilities) must live in a config struct, never as a hardcoded magic number in System logic. Example: `struct GameConfig { pub move_speed: f32, pub jump_force: f32 }`.
+8. **Config instances: `src/config/*.rs` + `src/config/mod.rs`** — concrete config values go under `src/config/` as separate files, split by domain (e.g. one file per map/scene: `src/config/map_city.rs`, `src/config/map_dungeon.rs`). `src/config/mod.rs` aggregates all config modules (`pub mod map_city; pub mod map_dungeon; ...`) and optionally re-exports them. Systems read config via Bevy `Resource`, never by importing config files directly — this keeps Systems testable with different configs.
 
 Directory layout example:
 
