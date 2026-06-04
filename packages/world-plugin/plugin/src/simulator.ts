@@ -145,18 +145,28 @@ export function createSimulator(config: SimulatorConfig) {
 
     const onInit = () => {
         if (!simulator) return;
+        let _s = simulator as ISimulator;
 
         simulator.addEventListener('spawn', (event) => {
+            if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
             pushRecord({ time: duration, type: 'spawn', data: (event as CustomEvent<{ object: IObject }>).detail.object });
         }
         );
 
         simulator.addEventListener('despawn', (event) => {
+            if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
             pushRecord({ time: duration, type: 'despawn', data: (event as CustomEvent<{ object: IObject }>).detail.object });
         });
 
         simulator.addEventListener('change', (event) => {
+            if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
             pushRecord({ time: duration, type: 'change', data: (event as CustomEvent<{ object: IObject }>).detail.object });
+        });
+        simulator.addEventListener('error', (event) => {
+            if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
+            const message = (event as CustomEvent<{ message: string }>).detail.message;
+            errorMessage = `Simulator error: ${message}`;
+            emitState();
         });
 
     };

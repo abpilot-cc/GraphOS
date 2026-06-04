@@ -15,6 +15,7 @@ export interface ISimulator extends EventTarget {
     on(event: 'despawn', listener: (event: CustomEvent<{ object: IObject }>) => void): void;
     on(event: 'change', listener: (event: CustomEvent<{ object: IObject }>) => void): void;
     on(event: 'reset', listener: (event: CustomEvent<{}>) => void): void;
+    on(event: 'error', listener: (event: CustomEvent<{ message: string }>) => void): void;
     emit(event: IEvent): void;
     update(dt: number): void;
     exit(): void;

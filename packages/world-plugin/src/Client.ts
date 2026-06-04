@@ -36,7 +36,7 @@ export type ClientState = {
     current: number;
     scale: number;
     fps: number;
-    state: 'running' | 'paused' | 'stopped';
+    state: 'running' | 'paused' | 'stopped' | 'error' | 'loading';
 };
 
 export interface IEventSource<T extends IObject> {
@@ -100,7 +100,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
 
     const records = useMemo(() => {
         if (!logKeyword.trim()) {
-            return allRecords.slice(0, MAX_VISIBLE_RECORDS);
+            return allRecords;
         }
 
         return allRecords.filter((item) => matchesLogKeyword(item, logKeyword));
@@ -196,7 +196,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                     data.id = ++autoId;
                     setAllRecords((prevRecords) => {
                         if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
-                            return [data, ...prevRecords];
+                            return [data, ...prevRecords].slice(0, MAX_VISIBLE_RECORDS);
                         }
                         if (data.type === 'change') {
                             Object.assign(prevRecords[0].data, data.data);

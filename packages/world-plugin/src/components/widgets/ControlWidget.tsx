@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Clock, Activity, Play, Pause, RotateCcw, FastForward, TrendingUp } from 'lucide-react';
+import { Clock, Activity, Play, Pause, RotateCcw, FastForward, TrendingUp, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useClient } from '@/src/Client';
 
@@ -22,7 +22,8 @@ export function ControlWidget() {
   };
 
   const setPlaying = () => {
-    if (client.state.state === 'stopped') {
+    if (client.state.state === 'loading') return;
+    if (client.state.state === 'stopped' || client.state.state === 'error') {
       client.emit('world-start');
     } else if (client.state.state === 'running') {
       client.emit('world-pause');
@@ -72,15 +73,23 @@ export function ControlWidget() {
           <div className="flex items-center gap-2">
             <motion.button
               id="btn-play-pause"
-              whileTap={{ scale: 0.95 }}
+              whileTap={client.state.state === 'loading' ? {} : { scale: 0.95 }}
               onClick={setPlaying}
-              className={`p-1.5 rounded-lg flex items-center gap-2 px-3 font-bold text-xs uppercase tracking-wider transition-all duration-300 ${client.state.state === 'running'
-                ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
-                : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_4px_12px_rgba(16,185,129,0.3)]'
-                }`}
+              disabled={client.state.state === 'loading'}
+              className={`p-1.5 rounded-lg flex items-center gap-2 px-3 font-bold text-xs uppercase tracking-wider transition-all duration-300 ${
+                client.state.state === 'loading'
+                  ? 'bg-zinc-300 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 cursor-not-allowed opacity-60'
+                  : client.state.state === 'running'
+                    ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+                    : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_4px_12px_rgba(16,185,129,0.3)]'
+              }`}
             >
-              {client.state.state === 'running' ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
-              {client.state.state === 'running' ? 'Pause' : 'Start'}
+              {client.state.state === 'loading'
+                ? <Loader2 size={12} className="animate-spin" />
+                : client.state.state === 'running'
+                  ? <Pause size={12} fill="currentColor" />
+                  : <Play size={12} fill="currentColor" />}
+              {client.state.state === 'loading' ? 'Loading' : client.state.state === 'running' ? 'Pause' : 'Start'}
             </motion.button>
 
             <motion.button
