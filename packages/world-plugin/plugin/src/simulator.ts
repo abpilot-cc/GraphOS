@@ -27,8 +27,8 @@ export type PluginSocket = {
 
 type AppRecord = {
     time: number;
-    type: 'event' | 'spawn' | 'change' | 'despawn';
-    data: IEvent<IObject> | IObject;
+    type: 'event' | 'spawn' | 'change' | 'despawn' | 'log';
+    data: IEvent<IObject> | IObject | string;
 };
 
 export type LogQueryOptions = {
@@ -162,6 +162,12 @@ export function createSimulator(config: SimulatorConfig) {
             if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
             pushRecord({ time: duration, type: 'change', data: (event as CustomEvent<{ object: IObject }>).detail.object });
         });
+
+        simulator.addEventListener('log', (event) => {
+            if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
+            pushRecord({ time: duration, type: 'log', data: (event as CustomEvent<string>).detail });
+        });
+
         simulator.addEventListener('error', (event) => {
             if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
             const message = (event as CustomEvent<{ message: string }>).detail.message;

@@ -343,6 +343,15 @@ Implementation guidance:
 - Use `Added<YourContext>` for spawn semantics.
 - Use `RemovedComponents<YourContext>` for despawn semantics.
 - Use `Res<Time<Virtual>>` for deterministic update timing.
+- For simulator-visible runtime logs, emit `crate::core::WorldLogEvent` via `Commands`:
+
+```rust
+commands.trigger(crate::core::WorldLogEvent {
+  log: "World context added".to_string(),
+});
+```
+
+- This event-based logging is the canonical way to produce records visible from `GET /api/world/log`; do not rely on `println!` for simulator log verification.
 - Query generated variant components directly; do not mirror generated state into ad-hoc global caches.
 - Keep temporary working data local to the observer function or a dedicated Bevy `Resource` owned by runtime code.
 - Do not modify generated files under `src/gen`.
@@ -456,6 +465,7 @@ Implementation guidance:
 - Register event handlers with `app.add_observer(...)`.
 - Use `On<GeneratedEvent>` as the trigger type.
 - Read payload from `trigger.event()`.
+- If the handler needs to expose runtime behavior to simulator logs, call `commands.trigger(crate::core::WorldLogEvent { ... })` in the handler path you want to verify.
 - Fetch target contexts/components via ECS `Query`; mutate only the scope owned by the graph.
 - If event payload schema changes in Graph, regenerate `src/gen` first, then update handler signatures.
 - Do not invent new topology in runtime code to compensate for missing graph nodes; go back to `graph-world`.
@@ -717,6 +727,7 @@ When logs show incorrect or missing behavior, apply the fix and restart the simu
 ### Key constraints
 
 - Do not use `cargo run` for simulation log verification. `cargo run` launches a native binary that does not integrate with the GraphOS simulator API (`/api/world/*`). All log verification must go through the simulator API via `npm run build:wasm:node` + HTTP endpoints.
+- Logs that must appear in `/api/world/log` should be emitted from runtime code with `commands.trigger(crate::core::WorldLogEvent { log: ... })`; stdout logging is not a substitute for simulator records.
 - Do not use the skill reference implementation's wasm for simulation. The simulator runs the project's own wasm built from the current workspace; verify via the project's `npm run build:wasm:node`, not by running the skill's `src/app/` reference code directly.
 - Never restart the GraphOS service to pick up wasm changes; `npm run build:wasm:node` + `POST /api/world/reset` then `POST /api/world/start` is sufficient.
 - After `npm run build:wasm:node` succeeds, immediately verify through the simulator API before declaring the fix complete.

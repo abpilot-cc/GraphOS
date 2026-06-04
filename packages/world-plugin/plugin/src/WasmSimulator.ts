@@ -89,6 +89,8 @@ export class WasmSimulator extends EventTarget implements ISimulator {
                             this._pendingEvents.push(new CustomEvent("change", { detail: { object } }));
                         }
                     }
+                } else if (message.Log) {
+                    this._pendingEvents.push(new CustomEvent("log", { detail: message.Log }));
                 }
             } catch (e) {
                 console.error("Failed to parse event from wasm worker:", e);
@@ -112,7 +114,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
         this._messages.push({ Event: { type: event.type, payload: event } });
     }
 
-    on(event: "spawn" | "despawn" | "change" | "reset" | "error", listener: (event: CustomEvent<any>) => void): void {
+    on(event: "spawn" | "despawn" | "change" | "reset" | "error" | "log", listener: (event: CustomEvent<any>) => void): void {
         this.addEventListener(event, listener as EventListener);
     }
 
@@ -122,6 +124,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
         this.removeEventListener('change', null);
         this.removeEventListener('reset', null);
         this.removeEventListener('error', null);
+        this.removeEventListener('log', null);
         this._worker.send({ type: "exit" });
         // Give the child process a moment to clean up, then force kill
         setTimeout(() => this._worker.kill(), 500);

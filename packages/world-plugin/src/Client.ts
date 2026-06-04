@@ -64,7 +64,7 @@ export interface IObject {
 
 type AppRecord = {
     time: number;
-    type: 'event' | 'spawn' | 'despawn' | 'change';
+    type: 'event' | 'spawn' | 'despawn' | 'change' | 'log';
     data: IEvent<IObject> | IObject;
     id: number;
 };
@@ -195,7 +195,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                     window.dispatchEvent(new CustomEvent('world-event-record', { detail: data }));
                     data.id = ++autoId;
                     setAllRecords((prevRecords) => {
-                        if (data.type === 'event' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
+                        if (data.type === 'event' || data.type === 'log' || prevRecords.length === 0 || prevRecords[0].type === 'event' || (prevRecords[0].data as IObject).table != (data.data as IObject).table || data.type !== prevRecords[0].type) {
                             return [data, ...prevRecords].slice(0, MAX_VISIBLE_RECORDS);
                         }
                         if (data.type === 'change') {
@@ -204,7 +204,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
                         }
                         return [data, ...prevRecords.slice(1)];
                     });
-                    if (data.type !== 'event') {
+                    if (data.type === 'spawn' || data.type === 'change' || data.type === 'despawn') {
                         let object = data.data as IObject;
                         if (data.type === 'spawn') {
                             let vs = objectSet.get(object.table);
