@@ -1,7 +1,7 @@
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 use nanoid::nanoid;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 // use tracing::info;
 use std::collections::HashMap;
 
@@ -19,6 +19,12 @@ pub struct Context {
     pub table: String,
     pub pid: Option<String>,
 }
+
+#[derive(Event)]
+pub struct Restore;
+
+#[derive(Event)]
+pub struct Startup;
 
 pub fn next_id() -> String {
     nanoid!()
@@ -39,6 +45,8 @@ pub enum Message {
         payload: serde_cbor::Value,
     },
     Reset,
+    Restore,
+    Startup,
 }
 
 #[derive(Resource, Default)]
@@ -279,6 +287,14 @@ fn on_update_system(mut res: ResMut<WorldResource>, mut commands: Commands) {
                 } else {
                     println!("Event type '{}' not found", r#type);
                 }
+            }
+            Message::Restore => {
+                println!("Restore world");
+                commands.trigger(Restore);
+            }
+            Message::Startup => {
+                println!("Startup world");
+                commands.trigger(Startup);
             }
         }
     }
