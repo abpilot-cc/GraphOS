@@ -13,6 +13,6 @@ pub fn reg(app: &mut App) {
     start_game_system::reg(app);
 }
 
-fn on_world_spawn(trigger: On<world_core::core::Startup>, mut commands: Commands) {
+fn on_world_spawn(trigger: On<world_bevy::core::Startup>, mut commands: Commands) {
     WorldContext::spawn(&mut commands, None, "World");
 }

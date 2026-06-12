@@ -5,7 +5,7 @@ import type { IEvent, IObject, ISimulator } from "./ISimulator.js";
 
 type InboundMessage =
     | { Event: { type: string; payload: unknown } }
-    | "Reset";
+    | "Reset" | "Startup";
 
 type WorkerOutbound =
     | { type: "ready" }
@@ -15,7 +15,7 @@ type WorkerOutbound =
 export class WasmSimulator extends EventTarget implements ISimulator {
 
     private _worker: ChildProcess;
-    private _messages: InboundMessage[] = [];
+    private _messages: InboundMessage[] = ['Startup'];
     private _pendingEvents: CustomEvent[] = [];
     /** stderr lines accumulated from the child process */
     private _stderrLines: string[] = [];

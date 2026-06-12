@@ -20,7 +20,7 @@ pub struct Context {
     pub pid: Option<String>,
 }
 
-#[derive(Event)]
+#[derive(Component)]
 pub struct Restore;
 
 #[derive(Event)]
@@ -61,6 +61,7 @@ pub struct WorldResource {
     inbound: std::collections::VecDeque<Message>,
     outbound: std::collections::VecDeque<Message>,
     entity_variants: HashMap<String, HashMap<String, serde_cbor::Value>>,
+    restore: bool,
 }
 
 impl WorldResource {
@@ -119,6 +120,7 @@ pub fn reg(app: &mut App) {
         inbound: std::collections::VecDeque::new(),
         outbound: std::collections::VecDeque::new(),
         entity_variants: HashMap::new(),
+        restore: false,
     });
     app.add_systems(PreUpdate, on_update_system);
     app.add_systems(PostUpdate, on_spawn_system.in_set(WorldSystemSet::Spawn));
@@ -232,9 +234,13 @@ fn on_update_system(mut res: ResMut<WorldResource>, mut commands: Commands) {
         match &msg {
             Message::Spawn(context) => {
                 println!("Spawning entity with context: {:?}", context);
-                let entity = commands.spawn((context.clone(),)).id();
+                let entity = match res.restore {
+                    true => commands.spawn( (context.clone(),Restore)).id(),
+                    false => commands.spawn( (context.clone(),)).id()
+                };
                 res.entitys.insert(context.id.clone(), entity);
                 res.contexts.insert(entity, context.clone());
+                
             }
             Message::Despawn(ctx) => {
                 println!("Despawning entity with context: {:?}", ctx);
@@ -279,6 +285,7 @@ fn on_update_system(mut res: ResMut<WorldResource>, mut commands: Commands) {
                 res.variant_tables.clear();
                 res.inbound.clear();
                 res.outbound.clear();
+                res.restore = false;
             }
             Message::Event { r#type, payload } => {
                 println!("Processing event of type '{}'", r#type);
@@ -289,8 +296,8 @@ fn on_update_system(mut res: ResMut<WorldResource>, mut commands: Commands) {
                 }
             }
             Message::Restore => {
-                println!("Restore world");
-                commands.trigger(Restore);
+                println!("Restore world"); 
+                res.restore = true;
             }
             Message::Startup => {
                 println!("Startup world");
