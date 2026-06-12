@@ -160,7 +160,7 @@ where
 
 pub fn reg_event<T>(app: &mut App)
 where
-    T: IEvent + DeserializeOwned + Send + Sync + 'static,
+    T: IEvent + Serialize + DeserializeOwned + Send + Sync + 'static,
     for<'a> <T as Event>::Trigger<'a>: Default,
 {
     let mut rs = app.world_mut().get_resource_mut::<WorldResource>().unwrap();
@@ -173,6 +173,7 @@ where
             };
         }),
     );
+    app.add_observer(on_event_system::<T>);
 }
 
 fn on_spawn_system(
@@ -184,6 +185,21 @@ fn on_spawn_system(
         res.contexts.insert(entity, context.clone());
         res.outbound.push_back(Message::Spawn(context.clone()));
     }
+}
+
+fn on_event_system<T>(trigger: On<T>, mut res: ResMut<WorldResource>)
+where
+    T: Event + IEvent + Serialize,
+{
+    let event = trigger.event();
+    let value = match serde_cbor::value::to_value(event) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    res.outbound.push_back(Message::Event {
+        r#type: T::name().to_string(),
+        payload: value,
+    });
 }
 
 fn on_change_system<T>(query: Query<(&Context, &T), Changed<T>>, mut res: ResMut<WorldResource>)
@@ -235,12 +251,11 @@ fn on_update_system(mut res: ResMut<WorldResource>, mut commands: Commands) {
             Message::Spawn(context) => {
                 println!("Spawning entity with context: {:?}", context);
                 let entity = match res.restore {
-                    true => commands.spawn( (context.clone(),Restore)).id(),
-                    false => commands.spawn( (context.clone(),)).id()
+                    true => commands.spawn((context.clone(), Restore)).id(),
+                    false => commands.spawn((context.clone(),)).id(),
                 };
                 res.entitys.insert(context.id.clone(), entity);
                 res.contexts.insert(entity, context.clone());
-                
             }
             Message::Despawn(ctx) => {
                 println!("Despawning entity with context: {:?}", ctx);
@@ -296,7 +311,7 @@ fn on_update_system(mut res: ResMut<WorldResource>, mut commands: Commands) {
                 }
             }
             Message::Restore => {
-                println!("Restore world"); 
+                println!("Restore world");
                 res.restore = true;
             }
             Message::Startup => {

@@ -1,6 +1,6 @@
 [package]
 name = "world-bevy"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 description = "World Rust Bevy"
 repository = "https://github.com/abpilot-cc/GraphOS"
