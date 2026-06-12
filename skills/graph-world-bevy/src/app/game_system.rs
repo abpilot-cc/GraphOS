@@ -1,4 +1,4 @@
-use crate::core::Context;
+use world_bevy::core::Context;
 use crate::r#gen::world::*;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;

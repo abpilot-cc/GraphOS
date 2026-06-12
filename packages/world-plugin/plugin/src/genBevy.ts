@@ -370,9 +370,9 @@ function generateCode(graph: IGraph): string {
     code += `// Generated at: ${new Date().toISOString()}\n\n`;
     code += `use bevy_app::prelude::*;\n`;
     code += `use bevy_ecs::prelude::*;\n`;
-    code += `use crate::core::{reg_event, reg_veriant, Context, IEvent, IVariant};\n`;
+    code += `use world_bevy::core::{reg_event, reg_veriant, Context, IEvent, IVariant};\n`;
     code += `use serde::{Deserialize, Serialize};\n\n`;
-    code += `// Context from crate::core is expected to be:\n`;
+    code += `// Context from world_bevy::core is expected to be:\n`;
     code += `// #[derive(Component, Debug, Clone, Serialize, Deserialize)]\n`;
     code += `// pub struct Context {\n`;
     code += `//     pub id: String,\n`;
