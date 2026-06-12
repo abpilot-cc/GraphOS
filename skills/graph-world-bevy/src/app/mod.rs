@@ -7,12 +7,12 @@ pub mod start_game_system;
 pub mod world_bootstrap_system;
 
 pub fn reg(app: &mut App) {
-    app.add_systems(Startup, on_world_spawn);
+    app.add_observer(on_world_spawn);
     world_bootstrap_system::reg(app);
     game_system::reg(app);
     start_game_system::reg(app);
 }
 
-fn on_world_spawn(mut commands: Commands) {
+fn on_world_spawn(trigger On<world_core::core::Startup>, mut commands: Commands) {
     WorldContext::spawn(&mut commands, None, "World");
 }
