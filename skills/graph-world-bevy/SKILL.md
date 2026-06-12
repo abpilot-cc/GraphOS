@@ -140,7 +140,7 @@ If a Cargo project already exists in the current directory, skip this step.
 Apply these rules in `Cargo.toml` for this skill:
 
 1. `package.name` MUST be fixed to `"app"`.
-2. Library output MUST support both crate types: `"cdylib"` and `"rlib"`.
+2. Library output MUST support both crate types: `"cdylib"` and `"rlib"` and `"staticlib"`.
 
 Example:
 
@@ -149,20 +149,20 @@ Example:
 name = "app"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 ```
 
-### Step 2: Add Bevy runtime dependencies (no rendering)
-
-Preferred (single `bevy` crate, default features disabled):
+### Step 2: Add world-bevy and Bevy runtime dependencies
 
 ```bash
+cargo add world-bevy
 cargo add bevy --no-default-features --features bevy_app,bevy_ecs,bevy_time
 ```
 
 Fallback (if feature flags change in newer Bevy releases):
 
 ```bash
+cargo add world-bevy
 cargo add bevy_app bevy_ecs bevy_time
 ```
 
@@ -170,6 +170,51 @@ Rules:
 - Always use the latest published versions.
 - Do not enable rendering/window/UI-related features.
 - Keep dependency set minimal: app, ecs, time.
+- `world-bevy` is a mandatory dependency; do not skip it.
+- See [world-bevy Dependency](#world-bevy-dependency) below for what the crate provides.
+
+### world-bevy Dependency
+
+```bash
+cargo add world-bevy
+```
+
+#### What world-bevy provides
+
+| Item | Path | Role |
+|---|---|---|
+| `Context` | `world_bevy::core::Context` | Core entity identity component (`id`, `table`, `pid`) |
+| `IVariant` | `world_bevy::core::IVariant` | Trait for graph variant components; implement this on generated variant types |
+| `IEvent` | `world_bevy::core::IEvent` | Trait for graph event types; implement this on generated event types |
+| `Message` | `world_bevy::core::Message` | Inbound/outbound message enum (`Spawn`, `Despawn`, `Change`, `Event`, `Reset`) |
+| `WorldResource` | `world_bevy::core::WorldResource` | Global runtime resource managing entity registry, variant tables, event dispatch, and message queues |
+| `next_id()` | `world_bevy::core::next_id` | Generate unique entity IDs |
+| `reg()` | `world_bevy::core::reg` | Register core world systems (`PreUpdate` message pump, `PostUpdate` spawn/change/despawn ordering) |
+| `reg_veriant()` | `world_bevy::core::reg_veriant` | Register a variant table entry for CBOR-driven component changes |
+| `reg_event()` | `world_bevy::core::reg_event` | Register an event type for CBOR-driven event dispatch |
+| `ffi` | `world_bevy::ffi` | C FFI bindings for wasm host integration (`ffi_app_create`, `ffi_app_update`, `ffi_app_inbound`, `ffi_app_outbound`, `ffi_app_exit`) |
+
+The project's `src/core/mod.rs` re-exports world-bevy types and adds project-specific helpers:
+
+```rust
+// src/core/mod.rs
+pub use world_bevy::core::*;
+
+use bevy_ecs::prelude::*;
+
+#[derive(Event)]
+pub struct WorldLogEvent {
+    pub log: String,
+}
+```
+
+This ensures that all `world_bevy::core::*` imports (used throughout `src/gen` and `src/app`) resolve to `world_bevy::core` types plus any project-local extensions.
+
+**Dependency rules:**
+- `world-bevy` MUST be listed in `Cargo.toml` before generating or compiling `src/gen`.
+- Generated `src/gen/world.rs` code uses `world_bevy::core::Context`, `world_bevy::core::IVariant`, and `world_bevy::core::IEvent` — these resolve through the `src/core/mod.rs` re-export chain.
+- Do not manually re-implement `Context`, `Message`, `WorldResource`, or the variant/event registration infrastructure — they are provided by `world-bevy`.
+- The `world-bevy` crate already depends on `bevy_app`, `bevy_ecs`, and `bevy_time`; the project crate only needs a direct `bevy` dependency when using additional Bevy plugins not covered by world-bevy's transitive dependencies.
 
 ### Step 3: Minimal runtime app (no renderer)
 
@@ -211,13 +256,16 @@ fn tick(time: Res<Time>, mut q: Query<&mut TickAge>) {
 }
 
 fn main() {
-    App::new()
-        .add_plugins(TimePlugin)
-        .add_systems(Startup, setup)
-        .add_systems(Update, tick)
-        .run();
+    let mut app = App::new();
+    app.add_plugins(TimePlugin);
+    world_bevy::core::reg(&mut app);
+    app.add_systems(Startup, setup);
+    app.add_systems(Update, tick);
+    app.run();
 }
 ```
+
+**Important:** `world_bevy::core::reg(&mut app)` must be called before any other system registration that depends on `WorldResource`. It inserts the `WorldResource` and sets up the message pump (`PreUpdate`) and spawn/change/despawn ordering (`PostUpdate`).
 
 ### Step 4: Build verification
 
@@ -265,8 +313,7 @@ src/
     mod.rs
     world.rs                     # generated — never edit
   core/
-    mod.rs
-    context.rs
+    mod.rs                     # re-exports world_bevy::core::* + project-local helpers (WorldLogEvent, etc.)
   lib.rs
   main.rs
 ```
@@ -303,7 +350,7 @@ Reference implementation for this skill lives in:
 Lifecycle systems in Bevy should be wired with observers and ECS queries, not by editing `src/gen`.
 
 ```rust
-use crate::core::Context;
+use world_bevy::core::Context;
 use crate::r#gen::world::*;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
@@ -345,10 +392,10 @@ Implementation guidance:
 - Use `Added<YourContext>` for spawn semantics.
 - Use `RemovedComponents<YourContext>` for despawn semantics.
 - Use `Res<Time<Virtual>>` for deterministic update timing.
-- For simulator-visible runtime logs, emit `crate::core::WorldLogEvent` via `Commands`:
+- For simulator-visible runtime logs, emit `world_bevy::core::WorldLogEvent` via `Commands`:
 
 ```rust
-commands.trigger(crate::core::WorldLogEvent {
+commands.trigger(world_bevy::core::WorldLogEvent {
   log: "World context added".to_string(),
 });
 ```
@@ -370,7 +417,7 @@ Goal: define a deterministic startup entry that bootstraps required root/domain 
 You must implement startup initialization in a dedicated bootstrap module under `src/app/`.
 
 ```rust
-use crate::core::Context;
+use world_bevy::core::Context;
 use crate::r#gen::world::*;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
@@ -436,7 +483,7 @@ Implement graph `EventSystem` handlers as Bevy observers over generated events.
 **Follow the [File Organization Rules](#file-organization-rules-mandatory) strictly.** Each EventSystem gets its own file in `src/app/`, named in snake_case (e.g. `StartGameEventSystem` → `start_game_event_system.rs`), and registered in `src/app/mod.rs`.
 
 ```rust
-use crate::core::Context;
+use world_bevy::core::Context;
 use crate::r#gen::world::*;
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
@@ -467,7 +514,7 @@ Implementation guidance:
 - Register event handlers with `app.add_observer(...)`.
 - Use `On<GeneratedEvent>` as the trigger type.
 - Read payload from `trigger.event()`.
-- If the handler needs to expose runtime behavior to simulator logs, call `commands.trigger(crate::core::WorldLogEvent { ... })` in the handler path you want to verify.
+- If the handler needs to expose runtime behavior to simulator logs, call `commands.trigger(world_bevy::core::WorldLogEvent { ... })` in the handler path you want to verify.
 - Fetch target contexts/components via ECS `Query`; mutate only the scope owned by the graph.
 - If event payload schema changes in Graph, regenerate `src/gen` first, then update handler signatures.
 - Do not invent new topology in runtime code to compensate for missing graph nodes; go back to `graph-world`.
@@ -513,9 +560,11 @@ mod config;
 fn main() {
     let mut app = App::new();
     app.add_plugins(TimePlugin);
+    // Register world-bevy core infrastructure (WorldResource, message pump, spawn/change/despawn systems)
+    world_bevy::core::reg(&mut app);
     // Insert concrete config instances as Resources (rule 7)
     app.insert_resource(config::game_config::GAME_CONFIG);
-    crate::core::reg(&mut app);
+    world_bevy::core::reg(&mut app);
     crate::r#gen::world::reg(&mut app);
     crate::app::reg(&mut app);
     app.run();
@@ -637,8 +686,8 @@ Output notes:
 
 1. Graph-first gate: runtime coding starts only after graph closure validation passes.
 2. No-TS gate: no TypeScript runtime implementation is introduced.
-3. Headless-Bevy gate: no rendering/window/UI Bevy modules enabled.
-4. Minimal-runtime gate: app, ecs, time capabilities are present and verified.
+3. Headless-Bevy gate: no rendering/window/UI Bevy modules enabled; `world-bevy` dependency is present in `Cargo.toml`.
+4. Minimal-runtime gate: app, ecs, time capabilities are present and verified; `world_bevy::core::reg(&mut app)` is called in `main.rs`.
 5. Generated-code gate: `src/gen` has been regenerated and re-read after Graph changes.
 6. App-wiring gate: all manual runtime logic lives in `src/app/`, not `src/gen/`; each System/EventSystem is in its own file with snake_case naming.
 7. Registration gate: every System/EventSystem module is wired through `src/app/mod.rs`.
@@ -653,6 +702,10 @@ Output notes:
 
 ## Failure Recovery
 
+- `world_bevy::core::Context` or `world_bevy::core::IVariant` not found:
+  ensure `src/core/mod.rs` contains `pub use world_bevy::core::*;` and `Cargo.toml` lists `world-bevy` as a dependency.
+- `world_bevy::core::reg` not called:
+  `WorldResource` will be missing, causing spawn/change/despawn systems to panic. Always call `world_bevy::core::reg(&mut app)` in `main.rs` before any system that queries `Res<WorldResource>`.
 - `cargo add bevy --no-default-features ...` fails due to feature changes:
   use split crates `bevy_app`, `bevy_ecs`, `bevy_time` instead.
 - Generated Rust types do not match expected Context/Event names:
@@ -730,7 +783,7 @@ When logs show incorrect or missing behavior, apply the fix and restart the simu
 ### Key constraints
 
 - Do not use `cargo run` for simulation log verification. `cargo run` launches a native binary that does not integrate with the GraphOS simulator API (`/api/world/*`). All log verification must go through the simulator API via `npm run build:wasm:node` + HTTP endpoints.
-- Logs that must appear in `/api/world/log` should be emitted from runtime code with `commands.trigger(crate::core::WorldLogEvent { log: ... })`; stdout logging is not a substitute for simulator records.
+- Logs that must appear in `/api/world/log` should be emitted from runtime code with `commands.trigger(world_bevy::core::WorldLogEvent { log: ... })`; stdout logging is not a substitute for simulator records.
 - Do not use the skill reference implementation's wasm for simulation. The simulator runs the project's own wasm built from the current workspace; verify via the project's `npm run build:wasm:node`, not by running the skill's `src/app/` reference code directly.
 - Never restart the GraphOS service to pick up wasm changes; `npm run build:wasm:node` + `POST /api/world/reset` then `POST /api/world/start` is sufficient.
 - After `npm run build:wasm:node` succeeds, immediately verify through the simulator API before declaring the fix complete.
