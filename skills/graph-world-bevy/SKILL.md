@@ -391,6 +391,7 @@ Implementation guidance:
 - Register per-system observers from `pub fn reg(app: &mut App)`.
 - Use `Added<YourContext>` for spawn semantics.
 - Use `RemovedComponents<YourContext>` for despawn semantics.
+- **Prohibited: never use `EventReader<T>` or `EventWriter<T>`.** Handle events exclusively with `On<T>` triggers + `app.add_observer(...)`.
 - Use `Res<Time<Virtual>>` for deterministic update timing.
 - For simulator-visible runtime logs, emit `world_bevy::core::WorldLogEvent` via `Commands`:
 
@@ -511,6 +512,7 @@ fn on_start_game_event_system(
 Implementation guidance:
 - Put each graph `EventSystem` into its own Rust module under `src/app/`.
 - Example: graph node `StartGameEventSystem` -> `src/app/start_game_system.rs`.
+- **Prohibited: NEVER use `EventReader<T>` or `EventWriter<T>` to read/write events.** Use `On<T>` with `app.add_observer(...)` as the only event handling mechanism.
 - Register event handlers with `app.add_observer(...)`.
 - Use `On<GeneratedEvent>` as the trigger type.
 - Read payload from `trigger.event()`.
@@ -691,14 +693,15 @@ Output notes:
 5. Generated-code gate: `src/gen` has been regenerated and re-read after Graph changes.
 6. App-wiring gate: all manual runtime logic lives in `src/app/`, not `src/gen/`; each System/EventSystem is in its own file with snake_case naming.
 7. Registration gate: every System/EventSystem module is wired through `src/app/mod.rs`.
-8. Types gate: shared types, enums, constants, and singleton IDs are centralized in `src/app/types.rs`; not scattered across System files.
-9. Common gate: reusable helper logic is centralized in `src/app/common.rs`; duplicated helper implementations across System/EventSystem files are prohibited.
-10. Config gate: all tunable logic parameters live in config structs (`src/app/config.rs`); no magic numbers in System logic; concrete config instances exist under `src/config/`.
-11. Startup gate: world bootstrap logic is idempotent and singleton-safe.
-12. Build gate: `cargo check` succeeds for the Rust runtime crate.
-13. wasm wiring gate: after any `System` / `EventSystem` / `src/app/mod.rs` change, `npm run build:wasm` succeeds.
-14. wasm gate: `wasm-pack build` succeeds and outputs package files.
-15. cross-compile gate: all required target scripts complete successfully on macOS toolchain.
+8. Event-observer gate: `EventReader<T>` and `EventWriter<T>` are prohibited. All event handling MUST use `On<T>` triggers registered via `app.add_observer(...)`. No `Events<T>` resource reads/writes anywhere in the codebase.
+9. Types gate: shared types, enums, constants, and singleton IDs are centralized in `src/app/types.rs`; not scattered across System files.
+10. Common gate: reusable helper logic is centralized in `src/app/common.rs`; duplicated helper implementations across System/EventSystem files are prohibited.
+11. Config gate: all tunable logic parameters live in config structs (`src/app/config.rs`); no magic numbers in System logic; concrete config instances exist under `src/config/`.
+12. Startup gate: world bootstrap logic is idempotent and singleton-safe.
+13. Build gate: `cargo check` succeeds for the Rust runtime crate.
+14. wasm wiring gate: after any `System` / `EventSystem` / `src/app/mod.rs` change, `npm run build:wasm` succeeds.
+15. wasm gate: `wasm-pack build` succeeds and outputs package files.
+16. cross-compile gate: all required target scripts complete successfully on macOS toolchain.
 
 ## Failure Recovery
 
@@ -734,6 +737,8 @@ Output notes:
   run `rustup target add <ios-target>` and retry.
 - Request needs graph topology change:
   pause Rust edits and switch back to `graph-world` first.
+- `EventReader<T>` or `EventWriter<T>` found in code:
+  replace with `On<T>` trigger + `app.add_observer(...)`. `EventReader`/`EventWriter` are legacy patterns incompatible with the observer-based event dispatch used by `world-bevy`.
 
 ## Simulator Log Verification Loop
 

@@ -42,7 +42,7 @@ export class AppSimulator extends EventTarget implements ISimulator {
         this._app.trigger({ ...event, source: this._worldContext } as IAppEvent<IObject>);
     }
 
-    on(event: "spawn" | "despawn" | "change" | "reset" | "error", listener: (event: CustomEvent<any>) => void): void {
+    on(event: "spawn" | "despawn" | "change" | "reset" | "error" | "event", listener: (event: CustomEvent<any>) => void): void {
         this.addEventListener(event, listener as EventListener);
     }
 

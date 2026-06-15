@@ -91,6 +91,8 @@ export class WasmSimulator extends EventTarget implements ISimulator {
                     }
                 } else if (message.Log) {
                     this._pendingEvents.push(new CustomEvent("log", { detail: message.Log }));
+                } else if (message.Event) {
+                    this._pendingEvents.push(new CustomEvent("event", { detail: message.Event }));
                 }
             } catch (e) {
                 console.error("Failed to parse event from wasm worker:", e);
@@ -114,7 +116,7 @@ export class WasmSimulator extends EventTarget implements ISimulator {
         this._messages.push({ Event: { type: event.type, payload: event } });
     }
 
-    on(event: "spawn" | "despawn" | "change" | "reset" | "error" | "log", listener: (event: CustomEvent<any>) => void): void {
+    on(event: "spawn" | "despawn" | "change" | "reset" | "error" | "log" | "event", listener: (event: CustomEvent<any>) => void): void {
         this.addEventListener(event, listener as EventListener);
     }
 

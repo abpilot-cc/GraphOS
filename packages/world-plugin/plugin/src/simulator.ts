@@ -168,6 +168,11 @@ export function createSimulator(config: SimulatorConfig) {
             pushRecord({ time: duration, type: 'log', data: (event as CustomEvent<string>).detail });
         });
 
+        simulator.addEventListener('event', (event) => {
+            if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
+            pushRecord({ time: duration, type: 'event', data: (event as CustomEvent<any>).detail });
+        });
+
         simulator.addEventListener('error', (event) => {
             if (_s !== simulator) return; // Simulator instance has been replaced, ignore old events
             const message = (event as CustomEvent<{ message: string }>).detail.message;
