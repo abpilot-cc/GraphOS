@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { genCocosCreator } from "./genCocosCreator.js";
 import { genWebTypeScript } from "./genWebTypeScript.js";
 import { genBevy } from "./genBevy.js";
+import { genCsharp } from "./genCsharp.js";
 import { createSimulator, type LogQueryOptions, type PluginSocket } from "./simulator.js";
 
 type WsEnvelope = {
@@ -391,6 +392,21 @@ export default function install(app: IApp, env: any) {
                 }
             } catch (err: any) {
                 console.error("Error generating Cocos Creator code for World:", err.stack || err);
+            }
+        }
+
+        if (env && env.world && env.world.genCsharp && env.world.genCsharp.enabled) {
+            const gen = path.join(env.workDir, env.world.genCsharp.outDir || "gen");
+            try {
+                const codeFiles = genCsharp(event.data, env.world.genCsharp.namespace);
+                fs.mkdirSync(gen, { recursive: true });
+                for (let file of codeFiles) {
+                    const target = path.join(gen, file.name);
+                    fs.mkdirSync(path.dirname(target), { recursive: true });
+                    fs.writeFileSync(target, file.content, "utf-8");
+                }
+            } catch (err: any) {
+                console.error("Error generating C# code for World:", err.stack || err);
             }
         }
 
