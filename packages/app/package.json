@@ -1,6 +1,6 @@
 {
   "name": "graphos-cli",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "type": "module",
   "files": [
     "bin/",
@@ -12,7 +12,7 @@
   },
   "scripts": {
     "start": "node build/server.js",
-    "dev": "tsx server.ts --cwd=../../../chicken/main-2 --port 3000",
+    "dev": "tsx server.ts --cwd=/Users/hailongz/Documents/src/gitlab.ftsview.com/ZeroLab/main --port 3000",
     "build:server": "tsc -p tsconfig.server.json",
     "build": "npm run build:server && vite build",
     "prepack": "npm run build",
@@ -24,7 +24,7 @@
     "@opencode-ai/sdk": "^1.15.10",
     "cors": "^2.8.6",
     "express": "^4.21.2",
-    "graphos-core": "^1.0.6",
+    "graphos-core": "^1.0.7",
     "vite": "^6.2.3",
     "ws": "^8.20.0",
     "zod": "^4.4.3"

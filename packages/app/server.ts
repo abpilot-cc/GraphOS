@@ -121,7 +121,16 @@ async function startServer(options: ServerOptions) {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(appRoot, "../dist");
-    app.use(express.static(distPath));
+    // Serve precompressed ".br" assets with "Content-Encoding: br" so browsers
+    // transparently decompress them over HTTP (required by e.g. Cocos Creator builds).
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.toLowerCase().endsWith(".br")) {
+          res.setHeader("Content-Encoding", "br");
+          res.setHeader("Vary", "Accept-Encoding");
+        }
+      },
+    }));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });

@@ -541,9 +541,19 @@ export default function install(app: IApp, env: any) {
         res.sendFile(path.join(distPath, "index.html"));
     });
 
+    const serveAppHeaders = (res: any, filePath: string) => {
+        if (filePath.toLowerCase().endsWith(".br")) {
+            res.setHeader("Content-Encoding", "br");
+            res.setHeader("Vary", "Accept-Encoding");
+        }
+        if (filePath.toLowerCase().endsWith(".wasm.br")) {
+            res.setHeader("Content-Type", "application/wasm");
+        }
+        res.setHeader("Cache-Control", "no-store");
+    };
 
     const appPath = path.join(env.workDir, "dist/app");
-    app.express().use("/app", express.static(appPath));
+    app.express().use("/app", express.static(appPath, { setHeaders: serveAppHeaders }));
     app.express().get("/app/*", (req, res) => {
         res.sendFile(path.join(appPath, "index.html"));
     });
@@ -558,7 +568,6 @@ export default function install(app: IApp, env: any) {
         };
 
         onEvent('world-get-state', () => simulator.emitState(socketLike));
-
         onEvent('world-get-graph', () => {
             if (graph) {
                 emit('world-graph', graph);
